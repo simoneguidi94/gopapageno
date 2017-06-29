@@ -11,6 +11,33 @@ This work is based on [Papageno](https://github.com/PAPAGENO-devels/papageno), a
 
 **Note:** at the moment the whole generative part of the project is missing. It is just a parser of arithmetic expressions.
 
+### Installation
+```
+go get github.com/simoneguidi94/gopapageno
+```
+
+### Example
+
+```go
+package main
+
+import (
+    "fmt"
+
+    "github.com/simoneguidi94/gopapageno/languages/arithmetic"
+)
+
+func main() {
+    success, result := arithmetic.Parse("expression.txt", 2)
+    
+    if success {
+        fmt.Printf("Result: %d\n", result)
+    } else {
+        fmt.Printf("Parse failed!")
+    }
+}
+```
+
 ### Authors and Contributors
 
  * Simone Guidi <simone.guidi@mail.polimi.it>
