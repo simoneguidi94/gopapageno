@@ -1,9 +1,9 @@
-package arithmetic
+package regex
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math"
+	"io/ioutil"
 	"runtime"
 	"time"
 )
@@ -195,11 +195,11 @@ representing the success or failure of the parsing and the symbol at the root of
 func ParseString(str []byte, numThreads int) (bool, *symbol) {
 	rawInputSize := len(str)
 
-	avgCharsPerToken := float64(2)
-
-	//The last multiplication by  is to account for the generated nonterminals
-	stackPoolSize := int(math.Ceil((float64(rawInputSize)/avgCharsPerToken)/float64(_STACK_SIZE))) * 2
-	stackPtrPoolSize := int(math.Ceil((float64(rawInputSize) / avgCharsPerToken) / float64(_STACK_PTR_SIZE)))
+	avgCharsPerToken := 1
+	
+	//The last multiplication by 2 is to account for the generated nonterminals
+	stackPoolSize := int(math.Ceil((float64(rawInputSize) / float64(avgCharsPerToken)) / float64(_STACK_SIZE))) * 2
+	stackPtrPoolSize := int(math.Ceil((float64(rawInputSize) / float64(avgCharsPerToken)) / float64(_STACK_PTR_SIZE)))
 
 	fmt.Println("stack pool size:", stackPoolSize)
 	fmt.Println("stack ptr pool size:", stackPtrPoolSize)
@@ -212,9 +212,9 @@ func ParseString(str []byte, numThreads int) (bool, *symbol) {
 
 	stackPtrPool := newStackPtrPool(stackPtrPoolSize)
 
-	lexerPreallocMem(rawInputSize, numThreads)
+	lexerPreallocMem(numThreads)
 
-	parserPreallocMem(rawInputSize, numThreads)
+	parserPreallocMem(numThreads)
 
 	runtime.GC()
 
@@ -275,7 +275,7 @@ func ParseString(str []byte, numThreads int) (bool, *symbol) {
 		curThreadStack := newLosPtr(stackPtrPool)
 		//If the thread is the first, push a # onto the stack
 		if i == 0 {
-			curThreadStack.Push(&symbol{_TERM, _NO_PREC, nil, nil, nil})
+			curThreadStack.Push(&symbol{__TERM, _NO_PREC, nil, nil, nil})
 			//Otherwise, push the first token onto the stack
 		} else {
 			curInputListIter := inputLists[i].HeadIterator()
@@ -285,7 +285,7 @@ func ParseString(str []byte, numThreads int) (bool, *symbol) {
 		}
 		//If the thread is the last, push a # onto the input list
 		if i == numThreads-1 {
-			inputLists[i].Push(&symbol{_TERM, _NO_PREC, nil, nil, nil})
+			inputLists[i].Push(&symbol{__TERM, _NO_PREC, nil, nil, nil})
 			//Otherwise, push onto the input list the first token of the next input list
 		} else {
 			nextInputListIter := inputLists[i+1].HeadIterator()
@@ -349,7 +349,7 @@ func ParseString(str []byte, numThreads int) (bool, *symbol) {
 		finalPassNewNonTerminalsList := newLos(stackPool)
 
 		finalPassStack := newLosPtr(stackPtrPool)
-		finalPassStack.Push(&symbol{_TERM, _NO_PREC, nil, nil, nil})
+		finalPassStack.Push(&symbol{__TERM, _NO_PREC, nil, nil, nil})
 		finalPassThreadContext := threadContext{0, &finalPassInput, &finalPassNewNonTerminalsList, &finalPassStack, ""}
 
 		//fmt.Print("Final pass thread input: ")
@@ -396,9 +396,6 @@ func ParseString(str []byte, numThreads int) (bool, *symbol) {
 		result = sym
 	}
 	fmt.Printf("Time to parse it: %s\n", time.Since(start))
-
-	fmt.Println("Remaining parser stacks:", stackPool.Remainder())
-	fmt.Println("Remaining parser stackptrs:", stackPtrPool.Remainder())
 
 	return true, result
 }

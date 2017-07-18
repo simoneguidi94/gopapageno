@@ -1,47 +1,45 @@
-package arithmetic
-
 import (
 	"fmt"
 	"math"
 )
 
 /*
-listOfStackPtrs is a list of stacks containing symbol pointers.
+listOfStacks is a list of stacks containing symbols.
 When the current stack is full a new one is automatically obtained and linked to it.
 */
-type listOfStackPtrs struct {
-	head *stackPtr
-	cur  *stackPtr
+type listOfStacks struct {
+	head *stack
+	cur  *stack
 	len  int
-	pool *stackPtrPool
+	pool *stackPool
 }
 
 /*
-iteratorPtr allows to iterate over a listOfStackPtrs, either forward or backward.
+iterator allows to iterate over a listOfStacks, either forward or backward.
 */
-type iteratorPtr struct {
-	los *listOfStackPtrs
-	cur *stackPtr
+type iterator struct {
+	los *listOfStacks
+	cur *stack
 	pos int
 }
 
 /*
-newLosPtr creates a new listOfStackPtrs initialized with one empty stack.
+newLos creates a new listOfStacks initialized with one empty stack.
 */
-func newLosPtr(pool *stackPtrPool) listOfStackPtrs {
+func newLos(pool *stackPool) listOfStacks {
 	firstStack := pool.GetSync()
-	return listOfStackPtrs{firstStack, firstStack, 0, pool}
+	return listOfStacks{firstStack, firstStack, 0, pool}
 }
 
 /*
-Push pushes a symbol pointer in the listOfStackPtrs.
-It returns the pointer itself.
+Push pushes a symbol in the listOfStacks.
+It returns a pointer to the pushed symbol.
 */
-func (l *listOfStackPtrs) Push(sym *symbol) *symbol {
+func (l *listOfStacks) Push(sym *symbol) *symbol {
 	curStack := l.cur
 
 	//If the current stack is full obtain a new stack and set it as the current one
-	if curStack.Tos >= _STACK_PTR_SIZE {
+	if curStack.Tos >= _STACK_SIZE {
 		if curStack.Next != nil {
 			curStack = curStack.Next
 		} else {
@@ -53,8 +51,11 @@ func (l *listOfStackPtrs) Push(sym *symbol) *symbol {
 		l.cur = curStack
 	}
 
-	//Copy the symbol pointer in the current position
-	curStack.Data[curStack.Tos] = sym
+	//Copy the symbol in the current position
+	curStack.Data[curStack.Tos] = *sym
+
+	//Save the pointer to the pushed symbol
+	symPtr := &curStack.Data[curStack.Tos]
 
 	//Increment the current position
 	curStack.Tos++
@@ -62,14 +63,14 @@ func (l *listOfStackPtrs) Push(sym *symbol) *symbol {
 	//Increment the total length of the list
 	l.len++
 
-	//Return the symbol pointer
-	return sym
+	//Return the pointer to the pushed symbol
+	return symPtr
 }
 
 /*
-Pop pops a symbol pointer from the stack and returns it.
+Pop pops a symbol from the stack and returns a pointer to it.
 */
-func (l *listOfStackPtrs) Pop() *symbol {
+func (l *listOfStacks) Pop() *symbol {
 	curStack := l.cur
 
 	//Decrement the current position
@@ -93,14 +94,14 @@ func (l *listOfStackPtrs) Pop() *symbol {
 	//Decrement the total length of the list
 	l.len--
 
-	//Return the symbol pointer
-	return curStack.Data[curStack.Tos]
+	//Return the pointer to the symbol
+	return &curStack.Data[curStack.Tos]
 }
 
 /*
-Merge merges a listOfStackPtrs to another by linking their stacks.
+Merge merges a listOfStacks to another by linking their stacks.
 */
-func (l *listOfStackPtrs) Merge(l2 listOfStackPtrs) {
+func (l *listOfStacks) Merge(l2 listOfStacks) {
 	l.cur.Next = l2.head
 	l2.head.Prev = l.cur
 	l.cur = l2.cur
@@ -108,17 +109,17 @@ func (l *listOfStackPtrs) Merge(l2 listOfStackPtrs) {
 }
 
 /*
-Split splits a listOfStackPtrs into a number of lists equal to numSplits,
-which are returned as a slice of listOfStackPtrs.
-If there are not at least numSplits stacks in the listOfStackPtrs it panics.
-The original listOfStackPtrs should not be used after this operation.
+Split splits a listOfStacks into a number of lists equal to numSplits,
+which are returned as a slice of listOfStacks.
+If there are not at least numSplits stacks in the listOfStacks it panics.
+The original listOfStacks should not be used after this operation.
 */
-func (l *listOfStackPtrs) Split(numSplits int) []listOfStackPtrs {
+func (l *listOfStacks) Split(numSplits int) []listOfStacks {
 	if numSplits > l.NumStacks() {
-		panic(fmt.Sprintln("Cannot apply", numSplits, "splits on a ListOfStacks containing only", l.NumStacks(), "stacks."))
+		panic(fmt.Sprintln("Cannot apply", numSplits, "splits on a listOfStacks containing only", l.NumStacks(), "stacks."))
 	}
 
-	listsOfStacks := make([]listOfStackPtrs, numSplits)
+	listsOfStacks := make([]listOfStacks, numSplits)
 	curList := 0
 
 	numStacks := l.NumStacks()
@@ -133,7 +134,7 @@ func (l *listOfStackPtrs) Split(numSplits int) []listOfStackPtrs {
 		stacksToAssign := int(math.Floor(remainder))
 
 		curStack.Prev = nil
-		listsOfStacks[curList] = listOfStackPtrs{curStack, curStack, curStack.Tos, l.pool}
+		listsOfStacks[curList] = listOfStacks{curStack, curStack, curStack.Tos, l.pool}
 
 		for i := 1; i < stacksToAssign; i++ {
 			curStack = curStack.Next
@@ -154,16 +155,16 @@ func (l *listOfStackPtrs) Split(numSplits int) []listOfStackPtrs {
 }
 
 /*
-Length returns the number of symbol pointers contained in the listOfStackPtrs
+Length returns the number of symbols contained in the listOfStacks
 */
-func (l *listOfStackPtrs) Length() int {
+func (l *listOfStacks) Length() int {
 	return l.len
 }
 
 /*
-NumStacks returns the number of stacks contained in the listOfStackPtrs
+NumStacks returns the number of stacks contained in the listOfStacks
 */
-func (l *listOfStackPtrs) NumStacks() int {
+func (l *listOfStacks) NumStacks() int {
 	i := 0
 
 	curStack := l.head
@@ -179,7 +180,7 @@ func (l *listOfStackPtrs) NumStacks() int {
 /*
 TODO: maybe move this method in the parser file
 */
-func (l *listOfStackPtrs) FindFirstTerminal() *symbol {
+func (l *listOfStacks) FindFirstTerminal() *symbol {
 	curStack := l.cur
 
 	pos := curStack.Tos - 1
@@ -205,13 +206,13 @@ func (l *listOfStackPtrs) FindFirstTerminal() *symbol {
 		}
 	}
 
-	return curStack.Data[pos]
+	return &curStack.Data[pos]
 }
 
 /*
-Println prints the content of the listOfStackPtrs.
+Println prints the content of the listOfStacks.
 */
-func (l *listOfStackPtrs) Println() {
+func (l *listOfStacks) Println() {
 	iterator := l.HeadIterator()
 
 	sym := iterator.Next()
@@ -223,24 +224,24 @@ func (l *listOfStackPtrs) Println() {
 }
 
 /*
-HeadIterator returns an Iterator starting at the first element of the list.
+HeadIterator returns an iterator initialized to point before the first element of the list.
 */
-func (l *listOfStackPtrs) HeadIterator() iteratorPtr {
-	return iteratorPtr{l, l.head, -1}
+func (l *listOfStacks) HeadIterator() iterator {
+	return iterator{l, l.head, -1}
 }
 
 /*
-TailIterator returns an Iterator starting at the last element of the list.
+TailIterator returns an iterator initialized to point after the last element of the list.
 */
-func (l *listOfStackPtrs) TailIterator() iteratorPtr {
-	return iteratorPtr{l, l.cur, l.cur.Tos}
+func (l *listOfStacks) TailIterator() iterator {
+	return iterator{l, l.cur, l.cur.Tos}
 }
 
 /*
-Prev moves the iterator one position backward and returns the current symbol pointer.
+Prev moves the iterator one position backward and returns a pointer to the current symbol.
 It returns nil if it points before the first element of the list.
 */
-func (i *iteratorPtr) Prev() *symbol {
+func (i *iterator) Prev() *symbol {
 	curStack := i.cur
 
 	i.pos--
@@ -255,28 +256,28 @@ func (i *iteratorPtr) Prev() *symbol {
 		i.pos = curStack.Tos - 1
 	}
 
-	return curStack.Data[i.pos]
+	return &curStack.Data[i.pos]
 }
 
 /*
-Cur returns the current symbol pointer.
+Cur returns a pointer to the current symbol.
 It returns nil if it points before the first element or after the last element of the list.
 */
-func (i *iteratorPtr) Cur() *symbol {
+func (i *iterator) Cur() *symbol {
 	curStack := i.cur
 
 	if i.pos < 0 || i.pos >= curStack.Tos {
 		return nil
 	}
 
-	return curStack.Data[i.pos]
+	return &curStack.Data[i.pos]
 }
 
 /*
-Next moves the iterator one position forward and returns the current symbol pointer.
+Next moves the iterator one position forward and returns a pointer to the current symbol.
 It returns nil if it points after the last element of the list.
 */
-func (i *iteratorPtr) Next() *symbol {
+func (i *iterator) Next() *symbol {
 	curStack := i.cur
 
 	i.pos++
@@ -291,5 +292,5 @@ func (i *iteratorPtr) Next() *symbol {
 		i.pos = 0
 	}
 
-	return curStack.Data[i.pos]
+	return &curStack.Data[i.pos]
 }

@@ -1,4 +1,4 @@
-package arithmetic
+package regex
 
 /*
 int64Pool allows to preallocate elements with type int64.
@@ -33,11 +33,4 @@ func (p *int64Pool) Get() *int64 {
 	addr := &p.pool[p.cur]
 	p.cur++
 	return addr
-}
-
-/*
-Remainder returns the number of items remaining in the pool.
-*/
-func (p *int64Pool) Remainder() int {
-	return len(p.pool) - p.cur
 }

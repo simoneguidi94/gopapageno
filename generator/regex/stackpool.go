@@ -1,4 +1,4 @@
-package arithmetic
+package regex
 
 import (
 	"fmt"
@@ -40,11 +40,4 @@ func (p *stackPool) GetSync() *stack {
 	p.cur++
 	p.lock.Unlock()
 	return addr
-}
-
-/*
-Remainder returns the number of items remaining in the pool.
-*/
-func (p *stackPool) Remainder() int {
-	return len(p.pool) - p.cur
 }

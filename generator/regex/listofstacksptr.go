@@ -1,4 +1,4 @@
-package arithmetic
+package regex
 
 import (
 	"fmt"

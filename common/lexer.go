@@ -1,5 +1,3 @@
-package arithmetic
-
 import (
 	"errors"
 )

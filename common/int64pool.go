@@ -1,5 +1,3 @@
-package arithmetic
-
 /*
 int64Pool allows to preallocate elements with type int64.
 It is not thread-safe, you have to create one for each thread.

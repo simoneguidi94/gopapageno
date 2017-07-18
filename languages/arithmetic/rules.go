@@ -14,27 +14,29 @@ type rule struct {
 }
 
 /*
-The maximum length of a rule of the language
+The maximum length of the rhs of a rule of the language
 */
-const _ARITH_MAX_RHS_LEN = 3
+const _MAX_RHS_LEN = 3
 
 /*
 The rules of the language. They are sorted by their rhs
 */
-var _ARITH_RULES = []rule{
-	rule{_S, []uint16{_E}},
-	rule{_E, []uint16{_E, _PLUS, _T}},
-	rule{_E, []uint16{_E, _PLUS, _F}},
-	rule{_E, []uint16{_T, _PLUS, _T}},
-	rule{_E, []uint16{_T, _PLUS, _F}},
-	rule{_T, []uint16{_T, _TIMES, _F}},
-	rule{_E, []uint16{_F, _PLUS, _T}},
-	rule{_E, []uint16{_F, _PLUS, _F}},
-	rule{_T, []uint16{_F, _TIMES, _F}},
-	rule{_F, []uint16{_LPAR, _E, _RPAR}},
-	rule{_F, []uint16{_LPAR, _T, _RPAR}},
-	rule{_F, []uint16{_LPAR, _F, _RPAR}},
-	rule{_F, []uint16{_NUMBER}},
+var _RULES = []rule{
+	rule{NEW_AXIOM, []uint16{E_F_S_T}},
+	rule{E_S, []uint16{E_F_S_T, PLUS, E_F_S_T}},
+	rule{E_S, []uint16{E_F_S_T, PLUS, E_S_T}},
+	rule{E_S_T, []uint16{E_F_S_T, TIMES, E_F_S_T}},
+	rule{NEW_AXIOM, []uint16{E_S}},
+	rule{E_S, []uint16{E_S, PLUS, E_F_S_T}},
+	rule{E_S, []uint16{E_S, PLUS, E_S_T}},
+	rule{NEW_AXIOM, []uint16{E_S_T}},
+	rule{E_S, []uint16{E_S_T, PLUS, E_F_S_T}},
+	rule{E_S, []uint16{E_S_T, PLUS, E_S_T}},
+	rule{E_S_T, []uint16{E_S_T, TIMES, E_F_S_T}},
+	rule{E_F_S_T, []uint16{LPAR, E_F_S_T, RPAR}},
+	rule{E_F_S_T, []uint16{LPAR, E_S, RPAR}},
+	rule{E_F_S_T, []uint16{LPAR, E_S_T, RPAR}},
+	rule{E_F_S_T, []uint16{NUMBER}},
 }
 
 /*
