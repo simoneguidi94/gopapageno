@@ -41,13 +41,14 @@ import (
 )
 
 func main() {
-    success, result := arithmetic.Parse("expression.txt", 2)
-    
-    if success {
-        fmt.Printf("Result: %d\n", result)
-    } else {
-        fmt.Printf("Parse failed!")
-    }
+	success, root := arithmetic.ParseFile("expression.txt", 2)
+
+	if success {
+		fmt.Println("Parse succeded!")
+		fmt.Println("Result:", *root.Value.(*int64))
+	} else {
+		fmt.Println("Parse failed!")
+	}
 }
 ```
 

@@ -50,11 +50,11 @@ func main() {
 
 	fmt.Println("Number of threads:", *numThreads)
 
-	success, result := arithmetic.Parse(*fname, *numThreads)
+	success, root := arithmetic.ParseFile(*fname, *numThreads)
 
 	if success {
 		fmt.Println("Parse succeded!")
-		fmt.Println("Result:", result)
+		fmt.Println("Result:", *root.Value.(*int64))
 	} else {
 		fmt.Println("Parse failed!")
 	}
