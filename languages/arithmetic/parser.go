@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
+	"os"
 	"runtime"
 	"time"
 )
@@ -192,7 +193,7 @@ ParseString parses a string in parallel using an operator precedence grammar.
 It takes as input a string as a slice of bytes and the number of threads, and returns a boolean
 representing the success or failure of the parsing and the symbol at the root of the syntactic tree (if successful).
 */
-func ParseString(str []byte, numThreads int) (bool, *symbol) {
+func ParseString(str []byte, numThreads int, cpuprofileFile *os.File) (bool, *symbol) {
 	rawInputSize := len(str)
 
 	avgCharsPerToken := float64(2)
@@ -230,7 +231,7 @@ func ParseString(str []byte, numThreads int) (bool, *symbol) {
 	//Lex the file and obtain the input list
 	start = time.Now()
 
-	input, err := lex(str, stackPool)
+	input, err := lex(str, stackPool, cpuprofileFile)
 
 	fmt.Printf("Time to lex: %s\n", time.Since(start))
 
@@ -408,7 +409,7 @@ ParseFile parses a file in parallel using an operator precedence grammar.
 It takes as input a filename and the number of threads, and returns a boolean
 representing the success or failure of the parsing and the symbol at the root of the syntactic tree (if successful).
 */
-func ParseFile(filename string, numThreads int) (bool, *symbol) {
+func ParseFile(filename string, numThreads int, cpuprofileFile *os.File) (bool, *symbol) {
 	bytes, err := ioutil.ReadFile(filename)
 
 	if err != nil {
@@ -416,5 +417,5 @@ func ParseFile(filename string, numThreads int) (bool, *symbol) {
 		return false, nil
 	}
 
-	return ParseString(bytes, numThreads)
+	return ParseString(bytes, numThreads, cpuprofileFile)
 }

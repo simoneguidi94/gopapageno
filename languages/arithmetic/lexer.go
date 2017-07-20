@@ -2,6 +2,10 @@ package arithmetic
 
 import (
 	"errors"
+	"log"
+	"os"
+	"runtime/pprof"
+	"unsafe"
 )
 
 const (
@@ -47,7 +51,9 @@ func (l *lexer) yyLex(genSym *symbol) int {
 				} else {
 					l.pos = lastFinalStatePos + 1
 					ruleNum := lastFinalStateReached.AssociatedRules[0]
-					text := string(l.data[startPos:l.pos])
+					textBytes := l.data[startPos:l.pos]
+					//TODO should be changed to safe code when Go supports no-op []byte to string conversion
+					text := *(*string)(unsafe.Pointer(&textBytes))
 					//fmt.Printf("%s: %d\n", text, ruleNum)
 					result = lexerFunction(0, ruleNum, text, genSym)
 					break
@@ -60,7 +66,9 @@ func (l *lexer) yyLex(genSym *symbol) int {
 					if l.pos == len(l.data)-1 {
 						l.pos = lastFinalStatePos + 1
 						ruleNum := lastFinalStateReached.AssociatedRules[0]
-						text := string(l.data[startPos:l.pos])
+						textBytes := l.data[startPos:l.pos]
+						//TODO should be changed to safe code when Go supports no-op []byte to string conversion
+						text := *(*string)(unsafe.Pointer(&textBytes))
 						//fmt.Printf("%s: %d\n", text, ruleNum)
 						result = lexerFunction(0, ruleNum, text, genSym)
 						break
@@ -78,12 +86,17 @@ lex reads an input string as a slice of byte and lexes it, pushing each symbol i
 It returns a listOfStacks containing all the lexed symbols.
 An error is returned if the string contains invalid data.
 */
-func lex(input []byte, stackPool *stackPool) (listOfStacks, error) {
+func lex(input []byte, stackPool *stackPool, cpuprofileFile *os.File) (listOfStacks, error) {
 	los := newLos(stackPool)
 
 	sym := symbol{}
 
 	lexer := lexer{input, 0}
+
+	if err := pprof.StartCPUProfile(cpuprofileFile); err != nil {
+		log.Fatal("could not start CPU profile: ", err)
+	}
+	defer pprof.StopCPUProfile()
 
 	//Lex the first symbol
 	res := lexer.yyLex(&sym)

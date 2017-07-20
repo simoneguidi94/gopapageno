@@ -1,7 +1,3 @@
-%option noyywrap
-%option noinput
-%option nounput
-
 LPAR    \(
 RPAR    \)
 PLUS    \+

@@ -1,5 +1,6 @@
 import (
 	"errors"
+	"unsafe"
 )
 
 const (
@@ -45,7 +46,9 @@ func (l *lexer) yyLex(genSym *symbol) int {
 				} else {
 					l.pos = lastFinalStatePos + 1
 					ruleNum := lastFinalStateReached.AssociatedRules[0]
-					text := string(l.data[startPos:l.pos])
+					textBytes := l.data[startPos:l.pos]
+					//TODO should be changed to safe code when Go supports no-op []byte to string conversion
+					text := *(*string)(unsafe.Pointer(&textBytes))
 					//fmt.Printf("%s: %d\n", text, ruleNum)
 					result = lexerFunction(0, ruleNum, text, genSym)
 					break
@@ -58,7 +61,9 @@ func (l *lexer) yyLex(genSym *symbol) int {
 					if l.pos == len(l.data)-1 {
 						l.pos = lastFinalStatePos + 1
 						ruleNum := lastFinalStateReached.AssociatedRules[0]
-						text := string(l.data[startPos:l.pos])
+						textBytes := l.data[startPos:l.pos]
+						//TODO should be changed to safe code when Go supports no-op []byte to string conversion
+						text := *(*string)(unsafe.Pointer(&textBytes))
 						//fmt.Printf("%s: %d\n", text, ruleNum)
 						result = lexerFunction(0, ruleNum, text, genSym)
 						break

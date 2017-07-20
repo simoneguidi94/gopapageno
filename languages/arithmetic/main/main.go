@@ -14,6 +14,8 @@ import (
 var cpuprofile = flag.String("cpuprofile", "", "") //write cpu profile to file")
 var memprofile = flag.String("memprofile", "", "") //write memory profile to file")
 
+var cpuprofileFile *os.File
+
 var fname = flag.String("fname", "", "the name of the file to parse")
 var numThreads = flag.Int("n", 1, "the number of threads to use")
 
@@ -36,21 +38,28 @@ func main() {
 
 	//Code needed for the cpu profiler
 	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
+		err := error(nil)
+		cpuprofileFile, err = os.Create(*cpuprofile)
 		if err != nil {
 			log.Fatal("could not create CPU profile: ", err)
 		}
-		if err := pprof.StartCPUProfile(f); err != nil {
+	}
+	/*if *cpuprofile != "" {
+		cpuprofileFile, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal("could not create CPU profile: ", err)
+		}
+		if err := pprof.StartCPUProfile(cpuprofileFile); err != nil {
 			log.Fatal("could not start CPU profile: ", err)
 		}
 		defer pprof.StopCPUProfile()
-	}
+	}*/
 
 	fmt.Println("Available cores:", runtime.GOMAXPROCS(0))
 
 	fmt.Println("Number of threads:", *numThreads)
 
-	success, root := arithmetic.ParseFile(*fname, *numThreads)
+	success, root := arithmetic.ParseFile(*fname, *numThreads, cpuprofileFile)
 
 	if success {
 		fmt.Println("Parse succeded!")

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<a>
+    <c>
+        <e another="primo" id="secondo">lol</e>
+        <h>text4</h>
+        <alt/>
+        <l></l>
+        <k id="it"></k>
+        <b id="prova" name="altro" spp="example">text</b>
+        <f third="here_we_go">text2</f>
+        <d>
+            <g id="content">text3</g>
+        </d>
+    </c>
+    <c>
+        <tag>primo esempio</tag>
+        <ella id="ola">asd</ella>
+    </c>
+</a>
