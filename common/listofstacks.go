@@ -178,38 +178,6 @@ func (l *listOfStacks) NumStacks() int {
 }
 
 /*
-TODO: maybe move this method in the parser file
-*/
-func (l *listOfStacks) FindFirstTerminal() *symbol {
-	curStack := l.cur
-
-	pos := curStack.Tos - 1
-
-	for pos < 0 {
-		pos = -1
-		if curStack.Prev == nil {
-			return nil
-		}
-		curStack = curStack.Prev
-		pos = curStack.Tos - 1
-	}
-
-	for !isTerminal(curStack.Data[pos].Token) {
-		pos--
-		for pos < 0 {
-			pos = -1
-			if curStack.Prev == nil {
-				return nil
-			}
-			curStack = curStack.Prev
-			pos = curStack.Tos - 1
-		}
-	}
-
-	return &curStack.Data[pos]
-}
-
-/*
 Println prints the content of the listOfStacks.
 */
 func (l *listOfStacks) Println() {

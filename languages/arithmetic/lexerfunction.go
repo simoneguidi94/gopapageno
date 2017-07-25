@@ -12,9 +12,9 @@ lexerPreallocMem initializes all the memory pools required by the lexer.
 */
 func lexerPreallocMem(inputSize int, numThreads int) {
 	lexerInt64Pools = make([]*int64Pool, numThreads)
-
+	
 	avgCharsPerNumber := float64(4)
-
+	
 	poolSizePerThread := int(math.Ceil((float64(inputSize) / avgCharsPerNumber) / float64(numThreads)))
 
 	for i := 0; i < numThreads; i++ {

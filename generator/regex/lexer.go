@@ -21,7 +21,7 @@ type lexer struct {
 /*
 lexerPreallocMem initializes all the memory pools required by the lexer.
 */
-func lexerPreallocMem(numThreads int) {
+func lexerPreallocMem(inputSize int, numThreads int) {
 }
 
 var insideSet bool = false
@@ -41,33 +41,33 @@ func (l *lexer) yyLex(genSym *symbol) int {
 
 		switch {
 		case curChar == '(':
-			*genSym = symbol{_lpar, 0, nil, nil, nil}
+			*genSym = symbol{lpar, 0, nil, nil, nil}
 			return _LEX_CORRECT
 		case curChar == ')':
-			*genSym = symbol{_rpar, 0, nil, nil, nil}
+			*genSym = symbol{rpar, 0, nil, nil, nil}
 			return _LEX_CORRECT
 		case curChar == '[':
 			insideSet = true
-			*genSym = symbol{_squarelpar, 0, nil, nil, nil}
+			*genSym = symbol{squarelpar, 0, nil, nil, nil}
 			return _LEX_CORRECT
 		case curChar == ']':
 			insideSet = false
-			*genSym = symbol{_squarerpar, 0, nil, nil, nil}
+			*genSym = symbol{squarerpar, 0, nil, nil, nil}
 			return _LEX_CORRECT
 		case curChar == '*':
-			*genSym = symbol{_star, 0, nil, nil, nil}
+			*genSym = symbol{star, 0, nil, nil, nil}
 			return _LEX_CORRECT
 		case curChar == '+':
-			*genSym = symbol{_plus, 0, nil, nil, nil}
+			*genSym = symbol{plus, 0, nil, nil, nil}
 			return _LEX_CORRECT
 		case curChar == '-':
-			*genSym = symbol{_dash, 0, nil, nil, nil}
+			*genSym = symbol{dash, 0, nil, nil, nil}
 			return _LEX_CORRECT
 		case curChar == '|':
-			*genSym = symbol{_pipe, 0, nil, nil, nil}
+			*genSym = symbol{pipe, 0, nil, nil, nil}
 			return _LEX_CORRECT
 		case curChar == '^':
-			*genSym = symbol{_caret, 0, nil, nil, nil}
+			*genSym = symbol{caret, 0, nil, nil, nil}
 			return _LEX_CORRECT
 		case curChar == '.':
 			var anyCharClass [256]bool
@@ -78,7 +78,7 @@ func (l *lexer) yyLex(genSym *symbol) int {
 			anyCharClass['\n'] = false
 			anyCharClass['\r'] = false
 			newNfa := newNfaFromCharClass(anyCharClass)
-			*genSym = symbol{_any, 0, &newNfa, nil, nil}
+			*genSym = symbol{any, 0, &newNfa, nil, nil}
 			return _LEX_CORRECT
 		case curChar == '\t' || curChar == '\r' || curChar == '\n':
 			//Do nothing
@@ -87,30 +87,30 @@ func (l *lexer) yyLex(genSym *symbol) int {
 			l.pos++
 			switch escapedChar {
 			case '(', ')', '[', ']', '*', '+', '-', '|', '^', '.', '\\':
-				token := uint16(_char)
+				token := uint16(char)
 				if insideSet {
-					token = _charinset
+					token = charinset
 				}
 				*genSym = symbol{token, 0, escapedChar, nil, nil}
 				return _LEX_CORRECT
 			case 't':
-				token := uint16(_char)
+				token := uint16(char)
 				if insideSet {
-					token = _charinset
+					token = charinset
 				}
 				*genSym = symbol{token, 0, byte('\t'), nil, nil}
 				return _LEX_CORRECT
 			case 'r':
-				token := uint16(_char)
+				token := uint16(char)
 				if insideSet {
-					token = _charinset
+					token = charinset
 				}
 				*genSym = symbol{token, 0, byte('\r'), nil, nil}
 				return _LEX_CORRECT
 			case 'n':
-				token := uint16(_char)
+				token := uint16(char)
 				if insideSet {
-					token = _charinset
+					token = charinset
 				}
 				*genSym = symbol{token, 0, byte('\n'), nil, nil}
 				return _LEX_CORRECT
@@ -118,9 +118,9 @@ func (l *lexer) yyLex(genSym *symbol) int {
 				return _ERROR
 			}
 		default:
-			token := uint16(_char)
+			token := uint16(char)
 			if insideSet {
-				token = _charinset
+				token = charinset
 			}
 			*genSym = symbol{token, 0, curChar, nil, nil}
 			return _LEX_CORRECT

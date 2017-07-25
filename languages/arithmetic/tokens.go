@@ -1,6 +1,6 @@
 package arithmetic
 
-const _NUM_NONTERMINALS = 4
+const _NUM_NONTERMINALS = 5
 const _NUM_TERMINALS = 6
 
 const (
@@ -8,6 +8,7 @@ const (
 	E_S = iota
 	E_S_T = iota
 	NEW_AXIOM = iota
+	_EMPTY = iota
 	LPAR = 0x8000 + iota - _NUM_NONTERMINALS
 	NUMBER = 0x8000 + iota - _NUM_NONTERMINALS
 	PLUS = 0x8000 + iota - _NUM_NONTERMINALS
@@ -34,6 +35,8 @@ func tokenToString(token uint16) string {
 		return "E_S_T"
 	case NEW_AXIOM:
 		return "NEW_AXIOM"
+	case _EMPTY:
+		return "_EMPTY"
 	case LPAR:
 		return "LPAR"
 	case NUMBER:

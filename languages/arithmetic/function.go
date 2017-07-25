@@ -24,7 +24,7 @@ func parserPreallocMem(inputSize int, numThreads int) {
 /*
 function is the semantic function of the parser.
 */
-func function(thread int, ruleNum int, lhs *symbol, rhs []*symbol) {
+func function(thread int, ruleNum uint16, lhs *symbol, rhs []*symbol) {
 	switch ruleNum {
 	case 0:
 		NEW_AXIOM0 := lhs

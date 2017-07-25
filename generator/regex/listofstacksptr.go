@@ -10,10 +10,11 @@ listOfStackPtrs is a list of stacks containing symbol pointers.
 When the current stack is full a new one is automatically obtained and linked to it.
 */
 type listOfStackPtrs struct {
-	head *stackPtr
-	cur  *stackPtr
-	len  int
-	pool *stackPtrPool
+	head          *stackPtr
+	cur           *stackPtr
+	len           int
+	firstTerminal *symbol
+	pool          *stackPtrPool
 }
 
 /*
@@ -30,7 +31,7 @@ newLosPtr creates a new listOfStackPtrs initialized with one empty stack.
 */
 func newLosPtr(pool *stackPtrPool) listOfStackPtrs {
 	firstStack := pool.GetSync()
-	return listOfStackPtrs{firstStack, firstStack, 0, pool}
+	return listOfStackPtrs{firstStack, firstStack, 0, nil, pool}
 }
 
 /*
@@ -55,6 +56,11 @@ func (l *listOfStackPtrs) Push(sym *symbol) *symbol {
 
 	//Copy the symbol pointer in the current position
 	curStack.Data[curStack.Tos] = sym
+
+	//If the symbol is a terminal update the firstTerminal pointer
+	if isTerminal(sym.Token) {
+		l.firstTerminal = sym
+	}
 
 	//Increment the current position
 	curStack.Tos++
@@ -105,6 +111,7 @@ func (l *listOfStackPtrs) Merge(l2 listOfStackPtrs) {
 	l2.head.Prev = l.cur
 	l.cur = l2.cur
 	l.len += l2.len
+	l.firstTerminal = l2.firstTerminal
 }
 
 /*
@@ -133,7 +140,7 @@ func (l *listOfStackPtrs) Split(numSplits int) []listOfStackPtrs {
 		stacksToAssign := int(math.Floor(remainder))
 
 		curStack.Prev = nil
-		listsOfStacks[curList] = listOfStackPtrs{curStack, curStack, curStack.Tos, l.pool}
+		listsOfStacks[curList] = listOfStackPtrs{curStack, curStack, curStack.Tos, nil, l.pool}
 
 		for i := 1; i < stacksToAssign; i++ {
 			curStack = curStack.Next
@@ -143,6 +150,8 @@ func (l *listOfStackPtrs) Split(numSplits int) []listOfStackPtrs {
 		nextStack := curStack.Next
 		curStack.Next = nil
 		curStack = nextStack
+
+		listsOfStacks[curList].firstTerminal = listsOfStacks[curList].findFirstTerminal()
 
 		remainder -= float64(stacksToAssign)
 		totAssignedStacks += stacksToAssign
@@ -177,9 +186,25 @@ func (l *listOfStackPtrs) NumStacks() int {
 }
 
 /*
-TODO: maybe move this method in the parser file
+FirstTerminal returns a pointer to the first terminal on the stack.
 */
-func (l *listOfStackPtrs) FindFirstTerminal() *symbol {
+func (l *listOfStackPtrs) FirstTerminal() *symbol {
+	return l.firstTerminal
+}
+
+/*
+UpdateFirstTerminal should be used after a reduction in order to update the first terminal counter.
+In fact, in order to save some time, only the Push operation automatically updates the first terminal pointer,
+while the Pop operation does not.
+*/
+func (l *listOfStackPtrs) UpdateFirstTerminal() {
+	l.firstTerminal = l.findFirstTerminal()
+}
+
+/*
+This function is for internal usage only.
+*/
+func (l *listOfStackPtrs) findFirstTerminal() *symbol {
 	curStack := l.cur
 
 	pos := curStack.Tos - 1

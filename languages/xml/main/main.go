@@ -43,17 +43,8 @@ func main() {
 		if err != nil {
 			log.Fatal("could not create CPU profile: ", err)
 		}
+		xml.SetCPUProfileFile(cpuprofileFile)
 	}
-	/*if *cpuprofile != "" {
-		cpuprofileFile, err := os.Create(*cpuprofile)
-		if err != nil {
-			log.Fatal("could not create CPU profile: ", err)
-		}
-		if err := pprof.StartCPUProfile(cpuprofileFile); err != nil {
-			log.Fatal("could not start CPU profile: ", err)
-		}
-		defer pprof.StopCPUProfile()
-	}*/
 
 	fmt.Println("Available cores:", runtime.GOMAXPROCS(0))
 
@@ -63,6 +54,15 @@ func main() {
 
 	if success {
 		fmt.Println("Parse succeded!")
+		fmt.Printf("Stack pool size: %d\n", xml.Stats.StackPoolSize)
+		fmt.Printf("StackPtr pool size: %d\n", xml.Stats.StackPtrPoolSize)
+		fmt.Printf("Time to alloc memory: %s\n", xml.Stats.AllocMemTime)
+		fmt.Printf("Time to lex: %s\n", xml.Stats.LexTime)
+		fmt.Printf("Number of tokens: %d\n", xml.Stats.NumTokens)
+		fmt.Printf("Time to parse: %s\n", xml.Stats.ParseTime)
+		fmt.Printf("Remaining parser stacks: %d\n", xml.Stats.RemainingStacks)
+		fmt.Printf("Remaining parser stackptrs: %d\n", xml.Stats.RemainingStackPtrs)
+
 	} else {
 		fmt.Println("Parse failed!")
 	}

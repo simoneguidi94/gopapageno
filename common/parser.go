@@ -1,10 +1,32 @@
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
 	"math"
+	"os"
 	"runtime"
+	"runtime/pprof"
 	"time"
 )
+
+/*
+parsingStats contains some statistics about the parse.
+*/
+type parsingStats struct {
+	StackPoolSize      int
+	StackPtrPoolSize   int
+	AllocMemTime       time.Duration
+	LexTime            time.Duration
+	NumTokens          int
+	ParseTime          time.Duration
+	RemainingStacks    int
+	RemainingStackPtrs int
+}
+
+/*
+Stats contains some statistics that may be checked after a call to ParseString or ParseFile
+*/
+var Stats parsingStats
 
 /*
 threadContext contains the data required by each thread, basically the thread number,
@@ -33,8 +55,7 @@ func threadJob(context threadContext, c chan threadContext) {
 
 	var pos int
 	var sym *symbol
-	var err error
-	var ruleNum int
+	var ruleNum uint16
 	var lhs uint16
 	var lhsSym *symbol
 	var rhs []uint16
@@ -70,7 +91,7 @@ func threadJob(context threadContext, c chan threadContext) {
 		}
 
 		//Find the first terminal on the stack and get the precedence between it and the current input token
-		firstTerminal := stack.FindFirstTerminal()
+		firstTerminal := stack.FirstTerminal()
 		prec := getPrecedence(firstTerminal.Token, inputSym.Token)
 
 		switch prec {
@@ -125,6 +146,7 @@ func threadJob(context threadContext, c chan threadContext) {
 					pos--
 					rhsSymbolsBuf[pos] = sym
 					rhsBuf[pos] = sym.Token
+					stack.UpdateFirstTerminal()
 				}
 
 				//Obtain the actual rhs from the buffers
@@ -132,10 +154,10 @@ func threadJob(context threadContext, c chan threadContext) {
 				rhs = rhsBuf[pos:]
 
 				//Find corresponding lhs and ruleNum
-				lhs, ruleNum, err = findMatch(rhs)
+				lhs, ruleNum = findMatch(rhs)
 
 				//If a rule with that rhs does not exist, abort the parsing
-				if err != nil {
+				if lhs == _EMPTY {
 					/*fmt.Print("Error, could not find a reduction for ")
 					for i := 0; i < len(rhs); i++ {
 						fmt.Print(TokenToString(rhs[i]))
@@ -185,6 +207,12 @@ func threadJob(context threadContext, c chan threadContext) {
 	c <- context
 }
 
+var cpuprofileFile *os.File = nil
+
+func SetCPUProfileFile(file *os.File) {
+	cpuprofileFile = file
+}
+
 /*
 ParseString parses a string in parallel using an operator precedence grammar.
 It takes as input a string as a slice of bytes and the number of threads, and returns a boolean
@@ -199,8 +227,8 @@ func ParseString(str []byte, numThreads int) (bool, *symbol) {
 	stackPoolSize := int(math.Ceil((float64(rawInputSize)/avgCharsPerToken)/float64(_STACK_SIZE))) * 2
 	stackPtrPoolSize := int(math.Ceil((float64(rawInputSize) / avgCharsPerToken) / float64(_STACK_PTR_SIZE)))
 
-	fmt.Println("stack pool size:", stackPoolSize)
-	fmt.Println("stack ptr pool size:", stackPtrPoolSize)
+	Stats.StackPoolSize = stackPoolSize
+	Stats.StackPtrPoolSize = stackPtrPoolSize
 
 	//Alloc memory required by both the lexer and the parser.
 	//The call to runtime.GC() avoids the garbage collector to run concurrently with the parser
@@ -216,21 +244,14 @@ func ParseString(str []byte, numThreads int) (bool, *symbol) {
 
 	runtime.GC()
 
-	fmt.Printf("Time to alloc memory: %s\n", time.Since(start))
+	Stats.AllocMemTime = time.Since(start)
 
-	//Create the trie from the grammar rules
-	start = time.Now()
-
-	trie = createTrie(_RULES)
-
-	fmt.Printf("Time to create the trie: %s\n", time.Since(start))
-
-	//Lex the file and obtain the input list
+	//Lex the file to obtain the input list
 	start = time.Now()
 
 	input, err := lex(str, stackPool)
 
-	fmt.Printf("Time to lex: %s\n", time.Since(start))
+	Stats.LexTime = time.Since(start)
 
 	//If lexing fails, abort the parsing
 	if err != nil {
@@ -238,7 +259,14 @@ func ParseString(str []byte, numThreads int) (bool, *symbol) {
 		return false, nil
 	}
 
-	fmt.Println("Number of tokens:", input.Length())
+	if cpuprofileFile != nil {
+		if err := pprof.StartCPUProfile(cpuprofileFile); err != nil {
+			log.Fatal("could not start CPU profile: ", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
+
+	Stats.NumTokens = input.Length()
 
 	if input.Length() == 0 {
 		return true, nil
@@ -324,7 +352,7 @@ func ParseString(str []byte, numThreads int) (bool, *symbol) {
 
 		//If one of the threads fails, abort the parsing
 		if threadContexts[i].result == "failure" {
-			fmt.Printf("Time to parse it: %s\n", time.Since(start))
+			Stats.ParseTime = time.Since(start)
 			return false, nil
 		}
 	}
@@ -365,7 +393,7 @@ func ParseString(str []byte, numThreads int) (bool, *symbol) {
 		//finalPassThreadContext.stack.Println()
 
 		if finalPassThreadContext.result == "failure" {
-			fmt.Printf("Time to parse it: %s\n", time.Since(start))
+			Stats.ParseTime = time.Since(start)
 			return false, nil
 		}
 
@@ -393,10 +421,11 @@ func ParseString(str []byte, numThreads int) (bool, *symbol) {
 		//Set the result as the nonterminal symbol
 		result = sym
 	}
-	fmt.Printf("Time to parse it: %s\n", time.Since(start))
 
-	fmt.Println("Remaining parser stacks:", stackPool.Remainder())
-	fmt.Println("Remaining parser stackptrs:", stackPtrPool.Remainder())
+	Stats.ParseTime = time.Since(start)
+
+	Stats.RemainingStacks = stackPool.Remainder()
+	Stats.RemainingStackPtrs = stackPtrPool.Remainder()
 
 	return true, result
 }

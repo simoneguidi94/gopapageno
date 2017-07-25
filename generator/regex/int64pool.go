@@ -34,3 +34,10 @@ func (p *int64Pool) Get() *int64 {
 	p.cur++
 	return addr
 }
+
+/*
+Remainder returns the number of items remaining in the pool.
+*/
+func (p *int64Pool) Remainder() int {
+	return len(p.pool) - p.cur
+}

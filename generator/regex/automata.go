@@ -1,6 +1,6 @@
 package regex
 
-const _EMPTY = 0
+const _EPSILON = 0
 
 type NfaState struct {
 	Transitions     [256][]*NfaState
@@ -16,7 +16,7 @@ func (state *NfaState) EpsilonClosure() []*NfaState {
 
 	for nextStateToCheckPos < len(closure) {
 		curState := closure[nextStateToCheckPos]
-		closure = append(closure, curState.Transitions[_EMPTY]...)
+		closure = append(closure, curState.Transitions[_EPSILON]...)
 		nextStateToCheckPos++
 	}
 
@@ -143,11 +143,11 @@ func (nfa1 *Nfa) Unite(nfa2 Nfa) {
 	newInitial := NfaState{}
 	newFinal := NfaState{}
 
-	newInitial.AddTransition(_EMPTY, nfa1.Initial)
-	newInitial.AddTransition(_EMPTY, nfa2.Initial)
+	newInitial.AddTransition(_EPSILON, nfa1.Initial)
+	newInitial.AddTransition(_EPSILON, nfa2.Initial)
 
-	nfa1.Final.AddTransition(_EMPTY, &newFinal)
-	nfa2.Final.AddTransition(_EMPTY, &newFinal)
+	nfa1.Final.AddTransition(_EPSILON, &newFinal)
+	nfa2.Final.AddTransition(_EPSILON, &newFinal)
 
 	nfa1.Initial = &newInitial
 	nfa1.Final = &newFinal
@@ -160,11 +160,11 @@ func (nfa *Nfa) KleeneStar() {
 	newInitial := NfaState{}
 	newFinal := NfaState{}
 
-	newInitial.AddTransition(_EMPTY, nfa.Initial)
-	newInitial.AddTransition(_EMPTY, &newFinal)
+	newInitial.AddTransition(_EPSILON, nfa.Initial)
+	newInitial.AddTransition(_EPSILON, &newFinal)
 
-	nfa.Final.AddTransition(_EMPTY, nfa.Initial)
-	nfa.Final.AddTransition(_EMPTY, &newFinal)
+	nfa.Final.AddTransition(_EPSILON, nfa.Initial)
+	nfa.Final.AddTransition(_EPSILON, &newFinal)
 
 	nfa.Initial = &newInitial
 	nfa.Final = &newFinal
@@ -177,10 +177,10 @@ func (nfa *Nfa) KleenePlus() {
 	newInitial := NfaState{}
 	newFinal := NfaState{}
 
-	newInitial.AddTransition(_EMPTY, nfa.Initial)
+	newInitial.AddTransition(_EPSILON, nfa.Initial)
 
-	nfa.Final.AddTransition(_EMPTY, nfa.Initial)
-	nfa.Final.AddTransition(_EMPTY, &newFinal)
+	nfa.Final.AddTransition(_EPSILON, nfa.Initial)
+	nfa.Final.AddTransition(_EPSILON, &newFinal)
 
 	nfa.Initial = &newInitial
 	nfa.Final = &newFinal
@@ -193,10 +193,10 @@ func (nfa *Nfa) ZeroOrOne() {
 	newInitial := NfaState{}
 	newFinal := NfaState{}
 
-	newInitial.AddTransition(_EMPTY, nfa.Initial)
-	newInitial.AddTransition(_EMPTY, &newFinal)
+	newInitial.AddTransition(_EPSILON, nfa.Initial)
+	newInitial.AddTransition(_EPSILON, &newFinal)
 
-	nfa.Final.AddTransition(_EMPTY, &newFinal)
+	nfa.Final.AddTransition(_EPSILON, &newFinal)
 
 	nfa.Initial = &newInitial
 	nfa.Final = &newFinal

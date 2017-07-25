@@ -120,7 +120,7 @@ func Generate(lexerFilename string, parserFilename string, outdir string) {
 	handleEmissionError(err)
 	err = emitTokens(outdir, newNonterminals, terminals)
 	handleEmissionError(err)
-	err = emitRules(outdir, sortedRules)
+	err = emitRules(outdir, sortedRules, newNonterminals, terminals)
 	handleEmissionError(err)
 	err = emitFunction(outdir, parserPreamble, sortedRules)
 	handleEmissionError(err)

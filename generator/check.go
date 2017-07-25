@@ -23,6 +23,7 @@ func inferTokens(rules []rule) (stringSet, stringSet) {
 		}
 	}
 
+	nonterminals.Add("_EMPTY")
 	terminals.Add("_TERM")
 
 	return nonterminals, terminals

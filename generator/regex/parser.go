@@ -2,11 +2,33 @@ package regex
 
 import (
 	"fmt"
-	"math"
 	"io/ioutil"
+	"log"
+	"math"
+	"os"
 	"runtime"
+	"runtime/pprof"
 	"time"
 )
+
+/*
+parsingStats contains some statistics about the parse.
+*/
+type parsingStats struct {
+	StackPoolSize      int
+	StackPtrPoolSize   int
+	AllocMemTime       time.Duration
+	LexTime            time.Duration
+	NumTokens          int
+	ParseTime          time.Duration
+	RemainingStacks    int
+	RemainingStackPtrs int
+}
+
+/*
+Stats contains some statistics that may be checked after a call to ParseString or ParseFile
+*/
+var Stats parsingStats
 
 /*
 threadContext contains the data required by each thread, basically the thread number,
@@ -35,8 +57,7 @@ func threadJob(context threadContext, c chan threadContext) {
 
 	var pos int
 	var sym *symbol
-	var err error
-	var ruleNum int
+	var ruleNum uint16
 	var lhs uint16
 	var lhsSym *symbol
 	var rhs []uint16
@@ -72,7 +93,7 @@ func threadJob(context threadContext, c chan threadContext) {
 		}
 
 		//Find the first terminal on the stack and get the precedence between it and the current input token
-		firstTerminal := stack.FindFirstTerminal()
+		firstTerminal := stack.FirstTerminal()
 		prec := getPrecedence(firstTerminal.Token, inputSym.Token)
 
 		switch prec {
@@ -127,6 +148,7 @@ func threadJob(context threadContext, c chan threadContext) {
 					pos--
 					rhsSymbolsBuf[pos] = sym
 					rhsBuf[pos] = sym.Token
+					stack.UpdateFirstTerminal()
 				}
 
 				//Obtain the actual rhs from the buffers
@@ -134,10 +156,10 @@ func threadJob(context threadContext, c chan threadContext) {
 				rhs = rhsBuf[pos:]
 
 				//Find corresponding lhs and ruleNum
-				lhs, ruleNum, err = findMatch(rhs)
+				lhs, ruleNum = findMatch(rhs)
 
 				//If a rule with that rhs does not exist, abort the parsing
-				if err != nil {
+				if lhs == _EMPTY {
 					/*fmt.Print("Error, could not find a reduction for ")
 					for i := 0; i < len(rhs); i++ {
 						fmt.Print(TokenToString(rhs[i]))
@@ -187,6 +209,12 @@ func threadJob(context threadContext, c chan threadContext) {
 	c <- context
 }
 
+var cpuprofileFile *os.File = nil
+
+func SetCPUProfileFile(file *os.File) {
+	cpuprofileFile = file
+}
+
 /*
 ParseString parses a string in parallel using an operator precedence grammar.
 It takes as input a string as a slice of bytes and the number of threads, and returns a boolean
@@ -195,14 +223,14 @@ representing the success or failure of the parsing and the symbol at the root of
 func ParseString(str []byte, numThreads int) (bool, *symbol) {
 	rawInputSize := len(str)
 
-	avgCharsPerToken := 1
-	
-	//The last multiplication by 2 is to account for the generated nonterminals
-	stackPoolSize := int(math.Ceil((float64(rawInputSize) / float64(avgCharsPerToken)) / float64(_STACK_SIZE))) * 2
-	stackPtrPoolSize := int(math.Ceil((float64(rawInputSize) / float64(avgCharsPerToken)) / float64(_STACK_PTR_SIZE)))
+	avgCharsPerToken := float64(2)
 
-	fmt.Println("stack pool size:", stackPoolSize)
-	fmt.Println("stack ptr pool size:", stackPtrPoolSize)
+	//The last multiplication by  is to account for the generated nonterminals
+	stackPoolSize := int(math.Ceil((float64(rawInputSize)/avgCharsPerToken)/float64(_STACK_SIZE))) * 2
+	stackPtrPoolSize := int(math.Ceil((float64(rawInputSize) / avgCharsPerToken) / float64(_STACK_PTR_SIZE)))
+
+	Stats.StackPoolSize = stackPoolSize
+	Stats.StackPtrPoolSize = stackPtrPoolSize
 
 	//Alloc memory required by both the lexer and the parser.
 	//The call to runtime.GC() avoids the garbage collector to run concurrently with the parser
@@ -212,27 +240,20 @@ func ParseString(str []byte, numThreads int) (bool, *symbol) {
 
 	stackPtrPool := newStackPtrPool(stackPtrPoolSize)
 
-	lexerPreallocMem(numThreads)
+	lexerPreallocMem(rawInputSize, numThreads)
 
-	parserPreallocMem(numThreads)
+	parserPreallocMem(rawInputSize, numThreads)
 
 	runtime.GC()
 
-	fmt.Printf("Time to alloc memory: %s\n", time.Since(start))
+	Stats.AllocMemTime = time.Since(start)
 
-	//Create the trie from the grammar rules
-	start = time.Now()
-
-	trie = createTrie(_RULES)
-
-	fmt.Printf("Time to create the trie: %s\n", time.Since(start))
-
-	//Lex the file and obtain the input list
+	//Lex the file to obtain the input list
 	start = time.Now()
 
 	input, err := lex(str, stackPool)
 
-	fmt.Printf("Time to lex: %s\n", time.Since(start))
+	Stats.LexTime = time.Since(start)
 
 	//If lexing fails, abort the parsing
 	if err != nil {
@@ -240,7 +261,14 @@ func ParseString(str []byte, numThreads int) (bool, *symbol) {
 		return false, nil
 	}
 
-	fmt.Println("Number of tokens:", input.Length())
+	if cpuprofileFile != nil {
+		if err := pprof.StartCPUProfile(cpuprofileFile); err != nil {
+			log.Fatal("could not start CPU profile: ", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
+
+	Stats.NumTokens = input.Length()
 
 	if input.Length() == 0 {
 		return true, nil
@@ -275,7 +303,7 @@ func ParseString(str []byte, numThreads int) (bool, *symbol) {
 		curThreadStack := newLosPtr(stackPtrPool)
 		//If the thread is the first, push a # onto the stack
 		if i == 0 {
-			curThreadStack.Push(&symbol{__TERM, _NO_PREC, nil, nil, nil})
+			curThreadStack.Push(&symbol{_TERM, _NO_PREC, nil, nil, nil})
 			//Otherwise, push the first token onto the stack
 		} else {
 			curInputListIter := inputLists[i].HeadIterator()
@@ -285,7 +313,7 @@ func ParseString(str []byte, numThreads int) (bool, *symbol) {
 		}
 		//If the thread is the last, push a # onto the input list
 		if i == numThreads-1 {
-			inputLists[i].Push(&symbol{__TERM, _NO_PREC, nil, nil, nil})
+			inputLists[i].Push(&symbol{_TERM, _NO_PREC, nil, nil, nil})
 			//Otherwise, push onto the input list the first token of the next input list
 		} else {
 			nextInputListIter := inputLists[i+1].HeadIterator()
@@ -326,7 +354,7 @@ func ParseString(str []byte, numThreads int) (bool, *symbol) {
 
 		//If one of the threads fails, abort the parsing
 		if threadContexts[i].result == "failure" {
-			fmt.Printf("Time to parse it: %s\n", time.Since(start))
+			Stats.ParseTime = time.Since(start)
 			return false, nil
 		}
 	}
@@ -349,7 +377,7 @@ func ParseString(str []byte, numThreads int) (bool, *symbol) {
 		finalPassNewNonTerminalsList := newLos(stackPool)
 
 		finalPassStack := newLosPtr(stackPtrPool)
-		finalPassStack.Push(&symbol{__TERM, _NO_PREC, nil, nil, nil})
+		finalPassStack.Push(&symbol{_TERM, _NO_PREC, nil, nil, nil})
 		finalPassThreadContext := threadContext{0, &finalPassInput, &finalPassNewNonTerminalsList, &finalPassStack, ""}
 
 		//fmt.Print("Final pass thread input: ")
@@ -367,7 +395,7 @@ func ParseString(str []byte, numThreads int) (bool, *symbol) {
 		//finalPassThreadContext.stack.Println()
 
 		if finalPassThreadContext.result == "failure" {
-			fmt.Printf("Time to parse it: %s\n", time.Since(start))
+			Stats.ParseTime = time.Since(start)
 			return false, nil
 		}
 
@@ -395,7 +423,11 @@ func ParseString(str []byte, numThreads int) (bool, *symbol) {
 		//Set the result as the nonterminal symbol
 		result = sym
 	}
-	fmt.Printf("Time to parse it: %s\n", time.Since(start))
+
+	Stats.ParseTime = time.Since(start)
+
+	Stats.RemainingStacks = stackPool.Remainder()
+	Stats.RemainingStackPtrs = stackPtrPool.Remainder()
 
 	return true, result
 }

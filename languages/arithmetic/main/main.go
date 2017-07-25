@@ -43,26 +43,25 @@ func main() {
 		if err != nil {
 			log.Fatal("could not create CPU profile: ", err)
 		}
+		arithmetic.SetCPUProfileFile(cpuprofileFile)
 	}
-	/*if *cpuprofile != "" {
-		cpuprofileFile, err := os.Create(*cpuprofile)
-		if err != nil {
-			log.Fatal("could not create CPU profile: ", err)
-		}
-		if err := pprof.StartCPUProfile(cpuprofileFile); err != nil {
-			log.Fatal("could not start CPU profile: ", err)
-		}
-		defer pprof.StopCPUProfile()
-	}*/
 
 	fmt.Println("Available cores:", runtime.GOMAXPROCS(0))
 
 	fmt.Println("Number of threads:", *numThreads)
 
-	success, root := arithmetic.ParseFile(*fname, *numThreads, cpuprofileFile)
+	success, root := arithmetic.ParseFile(*fname, *numThreads)
 
 	if success {
 		fmt.Println("Parse succeded!")
+		fmt.Printf("Stack pool size: %d\n", arithmetic.Stats.StackPoolSize)
+		fmt.Printf("StackPtr pool size: %d\n", arithmetic.Stats.StackPtrPoolSize)
+		fmt.Printf("Time to alloc memory: %s\n", arithmetic.Stats.AllocMemTime)
+		fmt.Printf("Time to lex: %s\n", arithmetic.Stats.LexTime)
+		fmt.Printf("Number of tokens: %d\n", arithmetic.Stats.NumTokens)
+		fmt.Printf("Time to parse: %s\n", arithmetic.Stats.ParseTime)
+		fmt.Printf("Remaining parser stacks: %d\n", arithmetic.Stats.RemainingStacks)
+		fmt.Printf("Remaining parser stackptrs: %d\n", arithmetic.Stats.RemainingStackPtrs)
 		fmt.Println("Result:", *root.Value.(*int64))
 	} else {
 		fmt.Println("Parse failed!")

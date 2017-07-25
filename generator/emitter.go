@@ -167,7 +167,7 @@ func emitTokens(outdir string, nonterminals stringSet, terminals stringSet) erro
 	return nil
 }
 
-func emitRules(outdir string, rules []rule) error {
+func emitRules(outdir string, rules []rule, nonterminals stringSet, terminals stringSet) error {
 	outPath := outdir + "/" + "rules.go"
 	file, err := createFile(outPath)
 
@@ -188,11 +188,6 @@ func emitRules(outdir string, rules []rule) error {
 	packageName := path.Base(outdir)
 
 	file.WriteString(fmt.Sprintf("package %s\n\n", packageName))
-
-	file.WriteString("import (\n")
-	file.WriteString("\t\"errors\"\n")
-	file.WriteString("\t\"fmt\"\n")
-	file.WriteString(")\n\n")
 
 	file.WriteString("/*\n")
 	file.WriteString("rule represents a grammar rule of the language. Its lhs is a single token while its rhs is a slice of tokens.\n")
@@ -216,138 +211,61 @@ func emitRules(outdir string, rules []rule) error {
 	}
 	file.WriteString("}\n\n")
 
+	trie := createTrie(rules, nonterminals, terminals)
+	compressedTrie := trie.Compress(nonterminals, terminals)
+
+	file.WriteString("var compressedTrie = []uint16{")
+	if len(compressedTrie) > 0 {
+		file.WriteString(fmt.Sprintf("%d", compressedTrie[0]))
+		for i := 1; i < len(compressedTrie); i++ {
+			file.WriteString(fmt.Sprintf(", %d", compressedTrie[i]))
+		}
+	}
+	file.WriteString("}\n\n")
+
 	file.WriteString(
 		`/*
-trieNodePtr consists in a (token) key and a pointer to a trieNode.
-*/
-type trieNodePtr struct {
-	Key uint16
-	Ptr *trieNode
-}
-
-/*
-trieNode is a node of a trie. It has pointers to other trieNodes
-and may have (if it's the terminal node of a rhs) a value (the corresponding lhs)
-as well as the number of the rule (needed for the semantic function).
-*/
-type trieNode struct {
-	HasValue bool
-	Value    uint16
-	RuleNum  int
-	Branches []trieNodePtr
-}
-
-/*
-Get obtains the node that is assigned to a certain key.
-It finds it by binary search as the keys are sorted.
-It returns null if no node is assigned to that key.
-*/
-func (trieNode *trieNode) Get(key uint16) *trieNode {
-	branches := trieNode.Branches
-	low := 0
-	high := len(branches) - 1
-
-	for low <= high {
-		curPos := low + (high-low)/2
-		curKey := branches[curPos].Key
-
-		if key < curKey {
-			high = curPos - 1
-		} else if key > curKey {
-			low = curPos + 1
-		} else {
-			return branches[curPos].Ptr
-		}
-	}
-
-	return nil
-}
-
-/*
-Find traverses a trie using the elements in rhs as keys,
-and returns the last node on success or nil on failure.
-*/
-func (trieNode *trieNode) Find(rhs []uint16) *trieNode {
-	curNode := trieNode
-	for _, token := range rhs {
-		nextNode := curNode.Get(token)
-		if nextNode == nil {
-			return nil
-		}
-		curNode = nextNode
-	}
-	return curNode
-}
-
-func (trieNode *trieNode) printR(curDepth int) {
-	if trieNode.HasValue {
-		fmt.Println(" ->", tokenToString(trieNode.Value))
-	} else {
-		fmt.Println()
-	}
-	for _, nodePtr := range trieNode.Branches {
-		for i := 0; i < curDepth; i++ {
-			fmt.Print("  ")
-		}
-
-		fmt.Print(tokenToString(nodePtr.Key))
-		nodePtr.Ptr.printR(curDepth + 1)
-	}
-}
-
-/*
-Println prints a representation of the trie.
-*/
-func (trieRoot *trieNode) Println() {
-	trieRoot.printR(0)
-	fmt.Println()
-}
-
-/*
-createTrie creates a trie from a set of rules and returns it.
-The rhs of the rules must be sorted.
-*/
-func createTrie(rules []rule) trieNode {
-	root := &trieNode{false, 0, 0, make([]trieNodePtr, 0)}
-
-	for i, rule := range rules {
-		curNode := root
-		for j, token := range rule.rhs {
-			nextNode := curNode.Get(token)
-			if nextNode == nil {
-				nextNode = &trieNode{false, 0, 0, make([]trieNodePtr, 0)}
-				curNode.Branches = append(curNode.Branches, trieNodePtr{token, nextNode})
-			}
-			curNode = nextNode
-
-			if j == len(rule.rhs)-1 {
-				curNode.HasValue = true
-				curNode.Value = rule.lhs
-				curNode.RuleNum = i
-			}
-		}
-	}
-
-	return *root
-}
-
-/*
-The trie used by the parser in the reduce process
-*/
-var trie trieNode
-
-/*
-FindMatch tries to find a match for the rhs using the variable trie which must be previously initialized.
+findMatch tries to find a match for the rhs using the compressed trie above.
 On success it returns the corresponding lhs and the rule number.
 On failure it returns an error.
 */
-func findMatch(rhs []uint16) (uint16, int, error) {
-	res := trie.Find(rhs)
+func findMatch(rhs []uint16) (uint16, uint16) {
+	pos := uint16(0)
 
-	if res != nil && res.HasValue {
-		return res.Value, res.RuleNum, nil
+	for _, key := range rhs {
+		//Skip the value and rule num for each node (except the last)
+		pos += 2
+		numIndices := compressedTrie[pos]
+		if numIndices == 0 {
+			return _EMPTY, 0
+		}
+		pos++
+		low := uint16(0)
+		high := uint16(numIndices - 1)
+		startPos := pos
+		foundNext := false
+
+		for low <= high {
+			indexpos := low + (high-low)/2
+			pos = startPos + indexpos*2
+			curKey := compressedTrie[pos]
+
+			if key < curKey {
+				high = indexpos - 1
+			} else if key > curKey {
+				low = indexpos + 1
+			} else {
+				pos = compressedTrie[pos+1]
+				foundNext = true
+				break
+			}
+		}
+		if !foundNext {
+			return _EMPTY, 0
+		}
 	}
-	return 0, 0, errors.New("")
+
+	return compressedTrie[pos], compressedTrie[pos+1]
 }`)
 
 	return nil
@@ -373,7 +291,7 @@ func emitFunction(outdir string, preamble string, rules []rule) error {
 	file.WriteString("/*\n")
 	file.WriteString("function is the semantic function of the parser.\n")
 	file.WriteString("*/\n")
-	file.WriteString("func function(thread int, ruleNum int, lhs *symbol, rhs []*symbol) {\n")
+	file.WriteString("func function(thread int, ruleNum uint16, lhs *symbol, rhs []*symbol) {\n")
 	file.WriteString("\tswitch ruleNum {\n")
 	for i, rule := range rules {
 		file.WriteString(fmt.Sprintf("\tcase %d:\n", i))

@@ -1,27 +1,28 @@
 package regex
 
-const _NUM_NONTERMINALS = 5
+const _NUM_NONTERMINALS = 6
 const _NUM_TERMINALS = 13
 
 const (
-	_CONCATENATION_RE_SIMPLE_RE = iota
-	_NEW_AXIOM = iota
-	_RE_SIMPLE_RE = iota
-	_RE_UNION = iota
-	_SET_ITEMS = iota
-	__TERM = 0x8000 + iota - _NUM_NONTERMINALS
-	_any = 0x8000 + iota - _NUM_NONTERMINALS
-	_caret = 0x8000 + iota - _NUM_NONTERMINALS
-	_char = 0x8000 + iota - _NUM_NONTERMINALS
-	_charinset = 0x8000 + iota - _NUM_NONTERMINALS
-	_dash = 0x8000 + iota - _NUM_NONTERMINALS
-	_lpar = 0x8000 + iota - _NUM_NONTERMINALS
-	_pipe = 0x8000 + iota - _NUM_NONTERMINALS
-	_plus = 0x8000 + iota - _NUM_NONTERMINALS
-	_rpar = 0x8000 + iota - _NUM_NONTERMINALS
-	_squarelpar = 0x8000 + iota - _NUM_NONTERMINALS
-	_squarerpar = 0x8000 + iota - _NUM_NONTERMINALS
-	_star = 0x8000 + iota - _NUM_NONTERMINALS
+	CONCATENATION_RE_SIMPLE_RE = iota
+	NEW_AXIOM = iota
+	RE_SIMPLE_RE = iota
+	RE_UNION = iota
+	SET_ITEMS = iota
+	_EMPTY = iota
+	_TERM = 0x8000 + iota - _NUM_NONTERMINALS
+	any = 0x8000 + iota - _NUM_NONTERMINALS
+	caret = 0x8000 + iota - _NUM_NONTERMINALS
+	char = 0x8000 + iota - _NUM_NONTERMINALS
+	charinset = 0x8000 + iota - _NUM_NONTERMINALS
+	dash = 0x8000 + iota - _NUM_NONTERMINALS
+	lpar = 0x8000 + iota - _NUM_NONTERMINALS
+	pipe = 0x8000 + iota - _NUM_NONTERMINALS
+	plus = 0x8000 + iota - _NUM_NONTERMINALS
+	rpar = 0x8000 + iota - _NUM_NONTERMINALS
+	squarelpar = 0x8000 + iota - _NUM_NONTERMINALS
+	squarerpar = 0x8000 + iota - _NUM_NONTERMINALS
+	star = 0x8000 + iota - _NUM_NONTERMINALS
 )
 
 func tokenValue(token uint16) uint16 {
@@ -34,41 +35,43 @@ func isTerminal(token uint16) bool {
 
 func tokenToString(token uint16) string {
 	switch token {
-	case _CONCATENATION_RE_SIMPLE_RE:
+	case CONCATENATION_RE_SIMPLE_RE:
 		return "CONCATENATION_RE_SIMPLE_RE"
-	case _NEW_AXIOM:
+	case NEW_AXIOM:
 		return "NEW_AXIOM"
-	case _RE_SIMPLE_RE:
+	case RE_SIMPLE_RE:
 		return "RE_SIMPLE_RE"
-	case _RE_UNION:
+	case RE_UNION:
 		return "RE_UNION"
-	case _SET_ITEMS:
+	case SET_ITEMS:
 		return "SET_ITEMS"
-	case __TERM:
+	case _EMPTY:
+		return "_EMPTY"
+	case _TERM:
 		return "_TERM"
-	case _any:
+	case any:
 		return "any"
-	case _caret:
+	case caret:
 		return "caret"
-	case _char:
+	case char:
 		return "char"
-	case _charinset:
+	case charinset:
 		return "charinset"
-	case _dash:
+	case dash:
 		return "dash"
-	case _lpar:
+	case lpar:
 		return "lpar"
-	case _pipe:
+	case pipe:
 		return "pipe"
-	case _plus:
+	case plus:
 		return "plus"
-	case _rpar:
+	case rpar:
 		return "rpar"
-	case _squarelpar:
+	case squarelpar:
 		return "squarelpar"
-	case _squarerpar:
+	case squarerpar:
 		return "squarerpar"
-	case _star:
+	case star:
 		return "star"
 	}
 	return "UNKNOWN_TOKEN"

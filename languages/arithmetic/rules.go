@@ -1,10 +1,5 @@
 package arithmetic
 
-import (
-	"errors"
-	"fmt"
-)
-
 /*
 rule represents a grammar rule of the language. Its lhs is a single token while its rhs is a slice of tokens.
 */
@@ -39,135 +34,48 @@ var _RULES = []rule{
 	rule{E_F_S_T, []uint16{NUMBER}},
 }
 
-/*
-trieNodePtr consists in a (token) key and a pointer to a trieNode.
-*/
-type trieNodePtr struct {
-	Key uint16
-	Ptr *trieNode
-}
+var compressedTrie = []uint16{4, 0, 5, 0, 13, 1, 41, 2, 59, 32768, 87, 32769, 120, 3, 0, 2, 32770, 20, 32772, 33, 4, 0, 2, 0, 27, 2, 30, 1, 1, 0, 1, 2, 0, 4, 0, 1, 0, 38, 2, 3, 0, 3, 4, 1, 32770, 46, 4, 0, 2, 0, 53, 2, 56, 1, 5, 0, 1, 6, 0, 3, 7, 2, 32770, 66, 32772, 79, 4, 0, 2, 0, 73, 2, 76, 1, 8, 0, 1, 9, 0, 4, 0, 1, 0, 84, 2, 10, 0, 4, 0, 3, 0, 96, 1, 104, 2, 112, 4, 0, 1, 32771, 101, 0, 11, 0, 4, 0, 1, 32771, 109, 0, 12, 0, 4, 0, 1, 32771, 117, 0, 13, 0, 0, 14, 0}
 
 /*
-trieNode is a node of a trie. It has pointers to other trieNodes
-and may have (if it's the terminal node of a rhs) a value (the corresponding lhs)
-as well as the number of the rule (needed for the semantic function).
-*/
-type trieNode struct {
-	HasValue bool
-	Value    uint16
-	RuleNum  int
-	Branches []trieNodePtr
-}
-
-/*
-Get obtains the node that is assigned to a certain key.
-It finds it by binary search as the keys are sorted.
-It returns null if no node is assigned to that key.
-*/
-func (trieNode *trieNode) Get(key uint16) *trieNode {
-	branches := trieNode.Branches
-	low := 0
-	high := len(branches) - 1
-
-	for low <= high {
-		curPos := low + (high-low)/2
-		curKey := branches[curPos].Key
-
-		if key < curKey {
-			high = curPos - 1
-		} else if key > curKey {
-			low = curPos + 1
-		} else {
-			return branches[curPos].Ptr
-		}
-	}
-
-	return nil
-}
-
-/*
-Find traverses a trie using the elements in rhs as keys,
-and returns the last node on success or nil on failure.
-*/
-func (trieNode *trieNode) Find(rhs []uint16) *trieNode {
-	curNode := trieNode
-	for _, token := range rhs {
-		nextNode := curNode.Get(token)
-		if nextNode == nil {
-			return nil
-		}
-		curNode = nextNode
-	}
-	return curNode
-}
-
-func (trieNode *trieNode) printR(curDepth int) {
-	if trieNode.HasValue {
-		fmt.Println(" ->", tokenToString(trieNode.Value))
-	} else {
-		fmt.Println()
-	}
-	for _, nodePtr := range trieNode.Branches {
-		for i := 0; i < curDepth; i++ {
-			fmt.Print("  ")
-		}
-
-		fmt.Print(tokenToString(nodePtr.Key))
-		nodePtr.Ptr.printR(curDepth + 1)
-	}
-}
-
-/*
-Println prints a representation of the trie.
-*/
-func (trieRoot *trieNode) Println() {
-	trieRoot.printR(0)
-	fmt.Println()
-}
-
-/*
-createTrie creates a trie from a set of rules and returns it.
-The rhs of the rules must be sorted.
-*/
-func createTrie(rules []rule) trieNode {
-	root := &trieNode{false, 0, 0, make([]trieNodePtr, 0)}
-
-	for i, rule := range rules {
-		curNode := root
-		for j, token := range rule.rhs {
-			nextNode := curNode.Get(token)
-			if nextNode == nil {
-				nextNode = &trieNode{false, 0, 0, make([]trieNodePtr, 0)}
-				curNode.Branches = append(curNode.Branches, trieNodePtr{token, nextNode})
-			}
-			curNode = nextNode
-
-			if j == len(rule.rhs)-1 {
-				curNode.HasValue = true
-				curNode.Value = rule.lhs
-				curNode.RuleNum = i
-			}
-		}
-	}
-
-	return *root
-}
-
-/*
-The trie used by the parser in the reduce process
-*/
-var trie trieNode
-
-/*
-FindMatch tries to find a match for the rhs using the variable trie which must be previously initialized.
+findMatch tries to find a match for the rhs using the compressed trie above.
 On success it returns the corresponding lhs and the rule number.
 On failure it returns an error.
 */
-func findMatch(rhs []uint16) (uint16, int, error) {
-	res := trie.Find(rhs)
+func findMatch(rhs []uint16) (uint16, uint16) {
+	pos := uint16(0)
 
-	if res != nil && res.HasValue {
-		return res.Value, res.RuleNum, nil
+	for _, key := range rhs {
+		//Skip the value and rule num for each node (except the last)
+		pos += 2
+		numIndices := compressedTrie[pos]
+		if numIndices == 0 {
+			return _EMPTY, 0
+		}
+		pos++
+		low := uint16(0)
+		high := uint16(numIndices - 1)
+		startPos := pos
+		foundNext := false
+
+		for low <= high {
+			indexpos := low + (high-low)/2
+			pos = startPos + indexpos*2
+			curKey := compressedTrie[pos]
+
+			if key < curKey {
+				high = indexpos - 1
+			} else if key > curKey {
+				low = indexpos + 1
+			} else {
+				pos = compressedTrie[pos+1]
+				foundNext = true
+				break
+			}
+		}
+		if !foundNext {
+			return _EMPTY, 0
+		}
 	}
-	return 0, 0, errors.New("")
+
+	return compressedTrie[pos], compressedTrie[pos+1]
 }

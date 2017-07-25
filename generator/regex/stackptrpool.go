@@ -41,3 +41,10 @@ func (p *stackPtrPool) GetSync() *stackPtr {
 	p.lock.Unlock()
 	return addr
 }
+
+/*
+Remainder returns the number of items remaining in the pool.
+*/
+func (p *stackPtrPool) Remainder() int {
+	return len(p.pool) - p.cur
+}

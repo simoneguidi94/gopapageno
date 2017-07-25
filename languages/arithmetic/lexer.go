@@ -2,9 +2,6 @@ package arithmetic
 
 import (
 	"errors"
-	"log"
-	"os"
-	"runtime/pprof"
 	"unsafe"
 )
 
@@ -86,17 +83,12 @@ lex reads an input string as a slice of byte and lexes it, pushing each symbol i
 It returns a listOfStacks containing all the lexed symbols.
 An error is returned if the string contains invalid data.
 */
-func lex(input []byte, stackPool *stackPool, cpuprofileFile *os.File) (listOfStacks, error) {
+func lex(input []byte, stackPool *stackPool) (listOfStacks, error) {
 	los := newLos(stackPool)
 
 	sym := symbol{}
 
 	lexer := lexer{input, 0}
-
-	if err := pprof.StartCPUProfile(cpuprofileFile); err != nil {
-		log.Fatal("could not start CPU profile: ", err)
-	}
-	defer pprof.StopCPUProfile()
 
 	//Lex the first symbol
 	res := lexer.yyLex(&sym)

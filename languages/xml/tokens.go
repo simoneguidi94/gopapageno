@@ -1,11 +1,12 @@
 package xml
 
-const _NUM_NONTERMINALS = 2
+const _NUM_NONTERMINALS = 3
 const _NUM_TERMINALS = 9
 
 const (
 	ELEM = iota
 	NEW_AXIOM = iota
+	_EMPTY = iota
 	_TERM = 0x8000 + iota - _NUM_NONTERMINALS
 	alternativeclose = 0x8000 + iota - _NUM_NONTERMINALS
 	closebracket = 0x8000 + iota - _NUM_NONTERMINALS
@@ -31,6 +32,8 @@ func tokenToString(token uint16) string {
 		return "ELEM"
 	case NEW_AXIOM:
 		return "NEW_AXIOM"
+	case _EMPTY:
+		return "_EMPTY"
 	case _TERM:
 		return "_TERM"
 	case alternativeclose:

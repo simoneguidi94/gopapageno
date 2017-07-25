@@ -1,7 +1,7 @@
 /*
 parserPreallocMem initializes all the memory pools required by the semantic function.
 */
-func parserPreallocMem(numThreads int) {
+func parserPreallocMem(inputSize int, numThreads int) {
 }
 %%
 
