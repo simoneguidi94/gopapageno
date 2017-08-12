@@ -1,3 +1,5 @@
+%cut \n
+
 LPAR    \(
 RPAR    \)
 PLUS    \+

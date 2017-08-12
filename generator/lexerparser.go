@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-func parseLexer(filename string) ([]lexRule, string) {
+func parseLexer(filename string) ([]lexRule, string, string) {
 	fmt.Println("Specified lexer file:", filename)
 
 	file, err := os.Open(filename)
@@ -21,12 +21,15 @@ func parseLexer(filename string) ([]lexRule, string) {
 
 	separatorRegex, err := regexp.Compile("^%%\\s*$")
 	checkRegexpCompileError(err)
+	cutPointsRegex, err := regexp.Compile("^%cut\\s*([^\\s].*)$")
+	checkRegexpCompileError(err)
 	definitionRegex, err := regexp.Compile("^([a-zA-Z][a-zA-Z0-9]*)\\s*(.+)$")
 	checkRegexpCompileError(err)
 
 	scanner := bufio.NewScanner(file)
 
 	//Scan the definitions section
+	cutPoints := ""
 	definitions := make(map[string]string)
 
 	for scanner.Scan() {
@@ -35,8 +38,11 @@ func parseLexer(filename string) ([]lexRule, string) {
 			break
 		}
 		defMatch := definitionRegex.FindStringSubmatch(curLine)
+		cutPointsMatch := cutPointsRegex.FindStringSubmatch(curLine)
 		if defMatch != nil {
 			definitions[defMatch[1]] = strings.TrimSpace(defMatch[2])
+		} else if cutPointsMatch != nil {
+			cutPoints = cutPointsMatch[1]
 		}
 	}
 
@@ -62,7 +68,7 @@ func parseLexer(filename string) ([]lexRule, string) {
 		codeLines = append(codeLines, curLine)
 	}
 
-	return lexRules, strings.Join(codeLines, "\n")
+	return lexRules, cutPoints, strings.Join(codeLines, "\n")
 }
 
 func parseLexRules(input string, definitions map[string]string) []lexRule {

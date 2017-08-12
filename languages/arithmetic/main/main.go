@@ -50,9 +50,9 @@ func main() {
 
 	fmt.Println("Number of threads:", *numThreads)
 
-	success, root := arithmetic.ParseFile(*fname, *numThreads)
+	root, err := arithmetic.ParseFile(*fname, *numThreads)
 
-	if success {
+	if err == nil {
 		fmt.Println("Parse succeded!")
 		fmt.Printf("Stack pool size: %d\n", arithmetic.Stats.StackPoolSize)
 		fmt.Printf("StackPtr pool size: %d\n", arithmetic.Stats.StackPtrPoolSize)
@@ -65,6 +65,7 @@ func main() {
 		fmt.Println("Result:", *root.Value.(*int64))
 	} else {
 		fmt.Println("Parse failed!")
+		fmt.Println(err.Error())
 	}
 
 	//Code needed for the mem profiler

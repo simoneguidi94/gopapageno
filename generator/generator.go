@@ -7,12 +7,14 @@ import (
 )
 
 func Generate(lexerFilename string, parserFilename string, outdir string) {
-	lexRules, lexCode := parseLexer(lexerFilename)
+	lexRules, cutPoints, lexCode := parseLexer(lexerFilename)
 
 	fmt.Printf("Lex rules (%d):\n", len(lexRules))
 	for _, r := range lexRules {
 		fmt.Println(r)
 	}
+
+	fmt.Printf("Cut points regex: %s\n", cutPoints)
 
 	fmt.Println("Lex code:")
 	fmt.Println(lexCode)
@@ -58,6 +60,22 @@ func Generate(lexerFilename string, parserFilename string, outdir string) {
 	} else {
 		fmt.Println("Error: the lexer does not contain any rule")
 		return
+	}
+
+	var cutPointsDfa regex.Dfa
+	if cutPoints == "" {
+		cutPointsNfa := regex.NewEmptyStringNfa()
+		cutPointsDfa = cutPointsNfa.ToDfa()
+	} else {
+		var cutPointsNfa *regex.Nfa
+		success, result := regex.ParseString([]byte(cutPoints), 1)
+		if success {
+			cutPointsNfa = result.Value.(*regex.Nfa)
+		} else {
+			fmt.Println("Error: could not parse the following regular expression:", cutPoints)
+			return
+		}
+		cutPointsDfa = cutPointsNfa.ToDfa()
 	}
 
 	parserPreamble, axiom, rules := parseGrammar(parserFilename)
@@ -116,7 +134,7 @@ func Generate(lexerFilename string, parserFilename string, outdir string) {
 	handleEmissionError(err)
 	err = emitLexerFunction(outdir, lexCode, lexRules)
 	handleEmissionError(err)
-	err = emitLexerAutomaton(outdir, dfa)
+	err = emitLexerAutomata(outdir, dfa, cutPointsDfa)
 	handleEmissionError(err)
 	err = emitTokens(outdir, newNonterminals, terminals)
 	handleEmissionError(err)

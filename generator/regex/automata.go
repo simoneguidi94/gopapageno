@@ -77,6 +77,18 @@ type Nfa struct {
 	NumStates int
 }
 
+func NewEmptyStringNfa() Nfa {
+	nfa := Nfa{}
+	nfaInitialFinal := NfaState{}
+
+	nfa.Initial = &nfaInitialFinal
+	nfa.Final = &nfaInitialFinal
+
+	nfa.NumStates = 1
+
+	return nfa
+}
+
 func newNfaFromChar(char byte) Nfa {
 	nfa := Nfa{}
 	nfaInitial := NfaState{}

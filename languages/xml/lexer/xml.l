@@ -1,3 +1,5 @@
+%cut <
+
 LBRACKET <
 RBRACKET >
 LSLASH   </
@@ -9,7 +11,6 @@ IDENT    [a-zA-Z0-9_\-\."=][a-zA-Z0-9_\-\."= ~]*
 INFOS    [a-zA-Z0-9_:#/,&;\.=\-\(\)@?\[\]\+'$"!][a-zA-Z0-9_:#/,&;\.=\-\(\)@?\[\]\+'$"! ~]*
 SPACE    [ \t]+
 NEWLINE  [\r\n]
-
 
 %%
 

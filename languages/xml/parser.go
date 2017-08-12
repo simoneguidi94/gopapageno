@@ -1,6 +1,7 @@
 package xml
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -40,6 +41,13 @@ type threadContext struct {
 	newNonTerminals *listOfStacks
 	stack           *listOfStackPtrs
 	result          string
+}
+
+type lexThreadContext struct {
+	num    int
+	data   []byte
+	output *listOfStacks
+	result string
 }
 
 /*
@@ -220,7 +228,7 @@ ParseString parses a string in parallel using an operator precedence grammar.
 It takes as input a string as a slice of bytes and the number of threads, and returns a boolean
 representing the success or failure of the parsing and the symbol at the root of the syntactic tree (if successful).
 */
-func ParseString(str []byte, numThreads int) (bool, *symbol) {
+func ParseString(str []byte, numThreads int) (*symbol, error) {
 	rawInputSize := len(str)
 
 	avgCharsPerToken := float64(12.5)
@@ -251,15 +259,54 @@ func ParseString(str []byte, numThreads int) (bool, *symbol) {
 	//Lex the file to obtain the input list
 	start = time.Now()
 
-	input, err := lex(str, stackPool)
+	cutPoints, numLexThreads := findCutPoints(str, numThreads)
+
+	if numLexThreads < numThreads {
+		fmt.Printf("It was not possible to find cut points for all %d threads.\n", numThreads)
+		fmt.Printf("The number of lexing threads was reduced to %d.\n", numLexThreads)
+	}
+
+	for i, v := range cutPoints {
+		fmt.Printf("cutpoint %d: %d\n", i, v)
+	}
+
+	lexThreadContexts := make([]lexThreadContext, numLexThreads)
+
+	lists := make([]listOfStacks, numLexThreads)
+
+	lexC := make(chan lexThreadContext)
+
+	for i := 0; i < numLexThreads; i++ {
+		lists[i] = newLos(stackPool)
+		lexThreadContexts[i] = lexThreadContext{i, str[cutPoints[i]:cutPoints[i+1]], &lists[i], ""}
+		go lex(lexThreadContexts[i], lexC)
+	}
+
+	for i := 0; i < numLexThreads; i++ {
+		curLexThreadContext := <-lexC
+		lexThreadContexts[curLexThreadContext.num] = curLexThreadContext
+
+		if curLexThreadContext.result == "failure" {
+			Stats.LexTime = time.Since(start)
+			return nil, errors.New("Lexing error")
+		}
+	}
+
+	input := lexThreadContexts[0].output
+
+	for i := 1; i < numLexThreads; i++ {
+		input.Merge(*lexThreadContexts[i].output)
+	}
+
+	//input, err := lex(str, stackPool, lexC)
 
 	Stats.LexTime = time.Since(start)
 
 	//If lexing fails, abort the parsing
-	if err != nil {
+	/*if err != nil {
 		fmt.Println(err.Error())
 		return false, nil
-	}
+	}*/
 
 	if cpuprofileFile != nil {
 		if err := pprof.StartCPUProfile(cpuprofileFile); err != nil {
@@ -271,7 +318,7 @@ func ParseString(str []byte, numThreads int) (bool, *symbol) {
 	Stats.NumTokens = input.Length()
 
 	if input.Length() == 0 {
-		return true, nil
+		return nil, nil
 	}
 
 	start = time.Now()
@@ -347,15 +394,15 @@ func ParseString(str []byte, numThreads int) (bool, *symbol) {
 
 		threadContexts[threadContext.num] = threadContext
 
-		//fmt.Println("Thread", threadContexts[i].num, "finished parsing")
-		//fmt.Println("Result:", threadContexts[i].result)
+		//fmt.Println("Thread", threadContext.num, "finished parsing")
+		//fmt.Println("Result:", threadContext.result)
 		//fmt.Print("Partial stack: ")
-		//threadContexts[i].stack.Println()
+		//threadContext.stack.Println()
 
 		//If one of the threads fails, abort the parsing
-		if threadContexts[i].result == "failure" {
+		if threadContext.result == "failure" {
 			Stats.ParseTime = time.Since(start)
-			return false, nil
+			return nil, errors.New("Parsing error")
 		}
 	}
 
@@ -396,7 +443,7 @@ func ParseString(str []byte, numThreads int) (bool, *symbol) {
 
 		if finalPassThreadContext.result == "failure" {
 			Stats.ParseTime = time.Since(start)
-			return false, nil
+			return nil, errors.New("Parsing error")
 		}
 
 		//Pop tokens from the stack until a nonterminal is found
@@ -429,7 +476,7 @@ func ParseString(str []byte, numThreads int) (bool, *symbol) {
 	Stats.RemainingStacks = stackPool.Remainder()
 	Stats.RemainingStackPtrs = stackPtrPool.Remainder()
 
-	return true, result
+	return result, nil
 }
 
 /*
@@ -437,12 +484,11 @@ ParseFile parses a file in parallel using an operator precedence grammar.
 It takes as input a filename and the number of threads, and returns a boolean
 representing the success or failure of the parsing and the symbol at the root of the syntactic tree (if successful).
 */
-func ParseFile(filename string, numThreads int) (bool, *symbol) {
+func ParseFile(filename string, numThreads int) (*symbol, error) {
 	bytes, err := ioutil.ReadFile(filename)
 
 	if err != nil {
-		fmt.Println(err.Error())
-		return false, nil
+		return nil, err
 	}
 
 	return ParseString(bytes, numThreads)
