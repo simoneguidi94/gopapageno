@@ -1,9 +1,5 @@
 benchmark 10MB.bat
 benchmark 10MB 2 threads.bat
-benchmark 30MB.bat
-benchmark 30MB 2 threads.bat
-benchmark 100MB.bat
-benchmark 100MB 2 threads.bat
 benchmark.exe
 plotscript
 lexparallelcode.dat

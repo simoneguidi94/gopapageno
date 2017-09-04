@@ -1,6 +1,7 @@
 package xml
 
 import (
+	"time"
 	"unsafe"
 )
 
@@ -116,10 +117,10 @@ lex is the lexing function executed in parallel by each thread.
 It takes as input a lexThreadContext and a channel where it eventually sends the result
 in form of a listOfStacks containing the lexed symbols.
 */
-func lex(lexContext lexThreadContext, c chan lexThreadContext) {
-	threadNum := lexContext.num
-	data := lexContext.data
-	los := lexContext.output
+func lex(threadNum int, data []byte, pool *stackPool, c chan lexResult) {
+	start := time.Now()
+
+	los := newLos(pool)
 
 	sym := symbol{}
 
@@ -131,8 +132,7 @@ func lex(lexContext lexThreadContext, c chan lexThreadContext) {
 	//Keep lexing until the end of the file is reached or an error occurs
 	for res != _END_OF_FILE {
 		if res == _ERROR {
-			lexContext.result = "failure"
-			c <- lexContext
+			c <- lexResult{threadNum, &los, false}
 			return
 		}
 		los.Push(&sym)
@@ -140,6 +140,7 @@ func lex(lexContext lexThreadContext, c chan lexThreadContext) {
 		res = lexer.yyLex(threadNum, &sym)
 	}
 
-	lexContext.result = "success"
-	c <- lexContext
+	c <- lexResult{threadNum, &los, true}
+
+	Stats.LexTimes[threadNum] = time.Since(start)
 }

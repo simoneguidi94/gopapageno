@@ -27,7 +27,7 @@ type iterator struct {
 newLos creates a new listOfStacks initialized with one empty stack.
 */
 func newLos(pool *stackPool) listOfStacks {
-	firstStack := pool.GetSync()
+	firstStack := pool.Get()
 	return listOfStacks{firstStack, firstStack, 0, pool}
 }
 
@@ -39,17 +39,32 @@ func (l *listOfStacks) Push(sym *symbol) *symbol {
 	curStack := l.cur
 
 	//If the current stack is full obtain a new stack and set it as the current one
-	if curStack.Tos >= _STACK_SIZE {
-		if curStack.Next != nil {
-			curStack = curStack.Next
-		} else {
-			newStack := l.pool.GetSync()
-			curStack.Next = newStack
-			newStack.Prev = curStack
-			curStack = newStack
-		}
-		l.cur = curStack
+	if curStack.Tos < _STACK_SIZE {
+		//Copy the symbol in the current position
+		curStack.Data[curStack.Tos] = *sym
+
+		//Save the pointer to the pushed symbol
+		symPtr := &curStack.Data[curStack.Tos]
+
+		//Increment the current position
+		curStack.Tos++
+
+		//Increment the total length of the list
+		l.len++
+
+		//Return the pointer to the pushed symbol
+		return symPtr
 	}
+
+	if curStack.Next != nil {
+		curStack = curStack.Next
+	} else {
+		newStack := l.pool.Get()
+		curStack.Next = newStack
+		newStack.Prev = curStack
+		curStack = newStack
+	}
+	l.cur = curStack
 
 	//Copy the symbol in the current position
 	curStack.Data[curStack.Tos] = *sym
@@ -78,18 +93,23 @@ func (l *listOfStacks) Pop() *symbol {
 
 	//While the current stack is empty set the previous stack as the current one.
 	//If there are no more stacks return nil
-	for curStack.Tos < 0 {
-		curStack.Tos = 0
+	if curStack.Tos >= 0 {
+		//Decrement the total length of the list
+		l.len--
 
-		if curStack.Prev == nil {
-			return nil
-		}
-
-		curStack = curStack.Prev
-		l.cur = curStack
-
-		curStack.Tos--
+		//Return the pointer to the symbol
+		return &curStack.Data[curStack.Tos]
 	}
+
+	curStack.Tos = 0
+
+	if curStack.Prev == nil {
+		return nil
+	}
+
+	curStack = curStack.Prev
+	curStack.Tos--
+	l.cur = curStack
 
 	//Decrement the total length of the list
 	l.len--
@@ -131,7 +151,7 @@ func (l *listOfStacks) Split(numSplits int) []listOfStacks {
 
 	for totAssignedStacks < numStacks {
 		remainder += deltaStacks
-		stacksToAssign := int(math.Floor(remainder))
+		stacksToAssign := int(math.Floor(remainder + 0.5))
 
 		curStack.Prev = nil
 		listsOfStacks[curList] = listOfStacks{curStack, curStack, curStack.Tos, l.pool}
@@ -214,15 +234,17 @@ func (i *iterator) Prev() *symbol {
 
 	i.pos--
 
-	for i.pos < 0 {
-		i.pos = -1
-		if curStack.Prev == nil {
-			return nil
-		}
-		curStack = curStack.Prev
-		i.cur = curStack
-		i.pos = curStack.Tos - 1
+	if i.pos >= 0 {
+		return &curStack.Data[i.pos]
 	}
+
+	i.pos = -1
+	if curStack.Prev == nil {
+		return nil
+	}
+	curStack = curStack.Prev
+	i.cur = curStack
+	i.pos = curStack.Tos - 1
 
 	return &curStack.Data[i.pos]
 }
@@ -234,11 +256,11 @@ It returns nil if it points before the first element or after the last element o
 func (i *iterator) Cur() *symbol {
 	curStack := i.cur
 
-	if i.pos < 0 || i.pos >= curStack.Tos {
-		return nil
+	if i.pos >= 0 && i.pos < curStack.Tos {
+		return &curStack.Data[i.pos]
 	}
 
-	return &curStack.Data[i.pos]
+	return nil
 }
 
 /*
@@ -250,15 +272,17 @@ func (i *iterator) Next() *symbol {
 
 	i.pos++
 
-	for i.pos >= curStack.Tos {
-		i.pos = curStack.Tos
-		if curStack.Next == nil {
-			return nil
-		}
-		curStack = curStack.Next
-		i.cur = curStack
-		i.pos = 0
+	if i.pos < curStack.Tos {
+		return &curStack.Data[i.pos]
 	}
+
+	i.pos = curStack.Tos
+	if curStack.Next == nil {
+		return nil
+	}
+	curStack = curStack.Next
+	i.cur = curStack
+	i.pos = 0
 
 	return &curStack.Data[i.pos]
 }

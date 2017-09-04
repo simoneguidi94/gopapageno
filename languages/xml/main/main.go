@@ -54,14 +54,52 @@ func main() {
 
 	if err == nil {
 		fmt.Println("Parse succeded!")
-		fmt.Printf("Stack pool size: %d\n", xml.Stats.StackPoolSize)
-		fmt.Printf("StackPtr pool size: %d\n", xml.Stats.StackPtrPoolSize)
-		fmt.Printf("Time to alloc memory: %s\n", xml.Stats.AllocMemTime)
-		fmt.Printf("Time to lex: %s\n", xml.Stats.LexTime)
-		fmt.Printf("Number of tokens: %d\n", xml.Stats.NumTokens)
-		fmt.Printf("Time to parse: %s\n", xml.Stats.ParseTime)
-		fmt.Printf("Remaining parser stacks: %d\n", xml.Stats.RemainingStacks)
-		fmt.Printf("Remaining parser stackptrs: %d\n", xml.Stats.RemainingStackPtrs)
+		for i, v := range xml.Stats.StackPoolSizes {
+			fmt.Printf("Stack pool size (thread %d): %d\n", i, v)
+		}
+		for i, v := range xml.Stats.StackPoolNewNonterminalsSizes {
+			fmt.Printf("Stack pool new nonterminals size (thread %d): %d\n", i, v)
+		}
+		for i, v := range xml.Stats.StackPtrPoolSizes {
+			fmt.Printf("StackPtr pool size (thread %d): %d\n", i, v)
+		}
+		fmt.Printf("Stack pool final pass size: %d\n", xml.Stats.StackPoolSizeFinalPass)
+		fmt.Printf("Stack pool final pass new nonterminals size: %d\n", xml.Stats.StackPoolNewNonterminalsSizeFinalPass)
+		fmt.Printf("StackPtr pool final pass size: %d\n", xml.Stats.StackPtrPoolSizeFinalPass)
+		fmt.Printf("Time to alloc memory: %s\n\n", xml.Stats.AllocMemTime)
+
+		for i, v := range xml.Stats.CutPoints {
+			fmt.Printf("cutpoint %d: %d\n", i, v)
+		}
+		for i, v := range xml.Stats.LexTimes {
+			fmt.Printf("Time to lex (thread %d): %s\n", i, v)
+		}
+		fmt.Printf("Time to lex (total): %s\n\n", xml.Stats.LexTimeTotal)
+
+		for i, v := range xml.Stats.NumTokens {
+			fmt.Printf("Number of tokens (thread %d): %d\n", i, v)
+		}
+		fmt.Printf("Number of tokens (total): %d\n", xml.Stats.NumTokensTotal)
+		for i, v := range xml.Stats.ParseTimes {
+			fmt.Printf("Time to parse (thread %d): %s\n", i, v)
+		}
+		fmt.Printf("Time to recombine the stacks: %s\n", xml.Stats.RecombiningStacksTime)
+		fmt.Printf("Time to parse (final pass): %s\n", xml.Stats.ParseTimeFinalPass)
+		fmt.Printf("Time to parse (total): %s\n\n", xml.Stats.ParseTimeTotal)
+
+		for i, v := range xml.Stats.RemainingStacks {
+			fmt.Printf("Remaining stacks (thread %d): %d\n", i, v)
+		}
+		for i, v := range xml.Stats.RemainingStacksNewNonterminals {
+			fmt.Printf("Remaining stacks new nonterminals (thread %d): %d\n", i, v)
+		}
+		for i, v := range xml.Stats.RemainingStackPtrs {
+			fmt.Printf("Remaining stackPtrs (thread %d): %d\n", i, v)
+		}
+
+		fmt.Printf("Remaining stacks final pass: %d\n", xml.Stats.RemainingStacksFinalPass)
+		fmt.Printf("Remaining stacks new nonterminals final pass: %d\n", xml.Stats.RemainingStacksNewNonterminalsFinalPass)
+		fmt.Printf("Remaining stackPtrs final pass: %d\n", xml.Stats.RemainingStackPtrsFinalPass)
 
 	} else {
 		fmt.Println("Parse failed!")

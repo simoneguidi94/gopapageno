@@ -14,14 +14,30 @@ import (
 parsingStats contains some statistics about the parse.
 */
 type parsingStats struct {
-	StackPoolSize      int
-	StackPtrPoolSize   int
-	AllocMemTime       time.Duration
-	LexTime            time.Duration
-	NumTokens          int
-	ParseTime          time.Duration
-	RemainingStacks    int
-	RemainingStackPtrs int
+	NumLexThreads                           int
+	NumParseThreads                         int
+	StackPoolSizes                          []int
+	StackPoolNewNonterminalsSizes           []int
+	StackPtrPoolSizes                       []int
+	StackPoolSizeFinalPass                  int
+	StackPoolNewNonterminalsSizeFinalPass   int
+	StackPtrPoolSizeFinalPass               int
+	AllocMemTime                            time.Duration
+	CutPoints                               []int
+	LexTimes                                []time.Duration
+	LexTimeTotal                            time.Duration
+	NumTokens                               []int
+	NumTokensTotal                          int
+	ParseTimes                              []time.Duration
+	RecombiningStacksTime                   time.Duration
+	ParseTimeFinalPass                      time.Duration
+	ParseTimeTotal                          time.Duration
+	RemainingStacks                         []int
+	RemainingStacksNewNonterminals          []int
+	RemainingStackPtrs                      []int
+	RemainingStacksFinalPass                int
+	RemainingStacksNewNonterminalsFinalPass int
+	RemainingStackPtrsFinalPass             int
 }
 
 /*
@@ -33,31 +49,47 @@ var Stats parsingStats
 threadContext contains the data required by each thread, basically the thread number,
 an input list, a parsing stack and a list that contains all the generated nonterminals.
 */
-type threadContext struct {
-	num             int
-	input           *listOfStacks
-	newNonTerminals *listOfStacks
-	stack           *listOfStackPtrs
-	result          string
+type parseResult struct {
+	threadNum int
+	stack     *listOfStackPtrs
+	success   bool
 }
 
-type lexThreadContext struct {
-	num    int
-	data   []byte
-	output *listOfStacks
-	result string
+type lexResult struct {
+	threadNum int
+	tokenList *listOfStacks
+	success   bool
 }
 
 /*
 threadJob is the parsing function executed in parallel by each thread.
 It takes as input a threadContext and a channel where it eventually sends the result.
 */
-func threadJob(context threadContext, c chan threadContext) {
-	threadNum := context.num
-	input := context.input
+func threadJob(numThreads int, threadNum int, finalPass bool, input *listOfStacks, nextSym *symbol, stackPool *stackPool, stackPtrPool *stackPtrPool, c chan parseResult) {
+	start := time.Now()
+
 	inputIterator := input.HeadIterator()
-	newNonTerminalsList := context.newNonTerminals
-	stack := context.stack
+	newNonTerminalsList := newLos(stackPool)
+	stack := newLosPtr(stackPtrPool)
+	//tokensRead := 0
+
+	//If the thread is the first, push a # onto the stack
+	if threadNum == 0 {
+		stack.Push(&symbol{_TERM, _NO_PREC, nil, nil, nil})
+		//Otherwise, push the first token onto the stack
+	} else {
+		sym := inputIterator.Next()
+		sym.Precedence = _NO_PREC
+		stack.Push(sym)
+		//tokensRead++
+	}
+	//If the thread is the last, push a # onto the input list
+	if threadNum == numThreads-1 {
+		input.Push(&symbol{_TERM, _NO_PREC, nil, nil, nil})
+		//Otherwise, push onto the input list the first token of the next input list
+	} else {
+		input.Push(nextSym)
+	}
 
 	numYieldsPrec := 0
 
@@ -71,21 +103,13 @@ func threadJob(context threadContext, c chan threadContext) {
 	rhsBuf := make([]uint16, _MAX_RHS_LEN)
 	rhsSymbolsBuf := make([]*symbol, _MAX_RHS_LEN)
 
-	tokensRead := 0
-
 	newNonTerm := &symbol{0, _NO_PREC, nil, nil, nil}
 
 	//Get the first symbol from the input list
 	inputSym := inputIterator.Next()
 
-	//Except for the first thread, ignore the first symbol and get the second one.
-	if threadNum > 0 {
-		inputSym = inputIterator.Next()
-		tokensRead++
-	}
-
 	//Iterate over all the input list
-	for tokensRead <= input.Length()-1 {
+	for inputSym != nil {
 		//stack.Println()
 
 		//If the current token is a nonterminal, push it onto the stack with no precedence relation
@@ -94,7 +118,7 @@ func threadJob(context threadContext, c chan threadContext) {
 			inputSym.Precedence = _NO_PREC
 			stack.Push(inputSym)
 			inputSym = inputIterator.Next()
-			tokensRead++
+			//tokensRead++
 			continue
 		}
 
@@ -111,14 +135,14 @@ func threadJob(context threadContext, c chan threadContext) {
 			stack.Push(inputSym)
 			numYieldsPrec++
 			inputSym = inputIterator.Next()
-			tokensRead++
+			//tokensRead++
 		//If it's equal in precedence, push the input token onto the stack with that precedence relation
 		case _EQ_PREC:
 			//fmt.Printf("Pushed (%s, %s)\n", TokenToString(inputSym.Token), precToString(prec))
 			inputSym.Precedence = _EQ_PREC
 			stack.Push(inputSym)
 			inputSym = inputIterator.Next()
-			tokensRead++
+			//tokensRead++
 		//If it takes precedence, the next action depends on whether there are tokens that yield precedence onto the stack.
 		case _TAKES_PREC:
 			//If there are no tokens yielding precedence on the stack, push the input token onto the stack
@@ -128,7 +152,7 @@ func threadJob(context threadContext, c chan threadContext) {
 				inputSym.Precedence = _TAKES_PREC
 				stack.Push(inputSym)
 				inputSym = inputIterator.Next()
-				tokensRead++
+				//tokensRead++
 				//Otherwise, perform a reduction
 			} else {
 				pos = _MAX_RHS_LEN - 1
@@ -173,8 +197,7 @@ func threadJob(context threadContext, c chan threadContext) {
 					}
 					fmt.Println()*/
 
-					context.result = "failure"
-					c <- context
+					c <- parseResult{threadNum, nil, true}
 
 					return
 				}
@@ -204,15 +227,19 @@ func threadJob(context threadContext, c chan threadContext) {
 		case _NO_PREC:
 			//fmt.Printf("Error, no precedence relation between %s and %s\n", TokenToString(firstTerminal.Token), TokenToString(inputSym.Token))
 
-			context.result = "failure"
-			c <- context
+			c <- parseResult{threadNum, nil, true}
 
 			return
 		}
 	}
 
-	context.result = "success"
-	c <- context
+	c <- parseResult{threadNum, &stack, true}
+
+	if !finalPass {
+		Stats.ParseTimes[threadNum] = time.Since(start)
+	} else {
+		Stats.ParseTimeFinalPass = time.Since(start)
+	}
 }
 
 var cpuprofileFile *os.File = nil
@@ -232,19 +259,44 @@ func ParseString(str []byte, numThreads int) (*symbol, error) {
 	avgCharsPerToken := float64(12.5)
 
 	//The last multiplication by  is to account for the generated nonterminals
-	stackPoolSize := int(math.Ceil((float64(rawInputSize)/avgCharsPerToken)/float64(_STACK_SIZE))) * 2
-	stackPtrPoolSize := int(math.Ceil((float64(rawInputSize) / avgCharsPerToken) / float64(_STACK_PTR_SIZE)))
+	stackPoolBaseSize := math.Ceil((((float64(rawInputSize) / avgCharsPerToken) / float64(_STACK_SIZE)) / float64(numThreads)))
+	stackPtrPoolBaseSize := math.Ceil(((float64(rawInputSize) / avgCharsPerToken) / float64(_STACK_PTR_SIZE)) / float64(numThreads))
 
-	Stats.StackPoolSize = stackPoolSize
-	Stats.StackPtrPoolSize = stackPtrPoolSize
+	//Stats.StackPoolSize = stackPoolSize
+	//Stats.StackPtrPoolSize = stackPtrPoolSize
 
 	//Alloc memory required by both the lexer and the parser.
 	//The call to runtime.GC() avoids the garbage collector to run concurrently with the parser
 	start := time.Now()
 
-	stackPool := newStackPool(stackPoolSize)
+	stackPools := make([]*stackPool, numThreads)
+	stackPoolsNewNonterminals := make([]*stackPool, numThreads)
+	stackPtrPools := make([]*stackPtrPool, numThreads)
 
-	stackPtrPool := newStackPtrPool(stackPtrPoolSize)
+	Stats.StackPoolSizes = make([]int, numThreads)
+	Stats.StackPoolNewNonterminalsSizes = make([]int, numThreads)
+	Stats.StackPtrPoolSizes = make([]int, numThreads)
+
+	for i := 0; i < numThreads; i++ {
+		stackPools[i] = newStackPool(int(stackPoolBaseSize * 1.2))
+		Stats.StackPoolSizes[i] = int(stackPoolBaseSize * 1.2)
+		stackPoolsNewNonterminals[i] = newStackPool(int(stackPoolBaseSize * 0.8))
+		Stats.StackPoolNewNonterminalsSizes[i] = int(stackPoolBaseSize * 0.8)
+		stackPtrPools[i] = newStackPtrPool(int(stackPtrPoolBaseSize))
+		Stats.StackPtrPoolSizes[i] = int(stackPtrPoolBaseSize)
+	}
+
+	var stackPoolFinalPass *stackPool
+	var stackPoolNewNonterminalsFinalPass *stackPool
+	var stackPtrPoolFinalPass *stackPtrPool
+	if numThreads > 1 {
+		stackPoolFinalPass = newStackPool(int(math.Ceil(stackPoolBaseSize * 0.1 * float64(numThreads))))
+		Stats.StackPoolSizeFinalPass = int(math.Ceil(stackPoolBaseSize * 0.1 * float64(numThreads)))
+		stackPoolNewNonterminalsFinalPass = newStackPool(int(math.Ceil(stackPoolBaseSize * 0.05 * float64(numThreads))))
+		Stats.StackPoolNewNonterminalsSizeFinalPass = int(math.Ceil(stackPoolBaseSize * 0.05 * float64(numThreads)))
+		stackPtrPoolFinalPass = newStackPtrPool(int(math.Ceil(stackPtrPoolBaseSize * 0.1)))
+		Stats.StackPtrPoolSizeFinalPass = int(int(math.Ceil(stackPtrPoolBaseSize * 0.1)))
+	}
 
 	lexerPreallocMem(rawInputSize, numThreads)
 
@@ -259,46 +311,42 @@ func ParseString(str []byte, numThreads int) (*symbol, error) {
 
 	cutPoints, numLexThreads := findCutPoints(str, numThreads)
 
+	Stats.NumLexThreads = numLexThreads
+	Stats.LexTimes = make([]time.Duration, numLexThreads)
+	Stats.CutPoints = cutPoints
+
 	if numLexThreads < numThreads {
 		fmt.Printf("It was not possible to find cut points for all %d threads.\n", numThreads)
 		fmt.Printf("The number of lexing threads was reduced to %d.\n", numLexThreads)
 	}
 
-	for i, v := range cutPoints {
-		fmt.Printf("cutpoint %d: %d\n", i, v)
-	}
-
-	lexThreadContexts := make([]lexThreadContext, numLexThreads)
-
-	lists := make([]listOfStacks, numLexThreads)
-
-	lexC := make(chan lexThreadContext)
+	lexC := make(chan lexResult)
 
 	for i := 0; i < numLexThreads; i++ {
-		lists[i] = newLos(stackPool)
-		lexThreadContexts[i] = lexThreadContext{i, str[cutPoints[i]:cutPoints[i+1]], &lists[i], ""}
-		go lex(lexThreadContexts[i], lexC)
+		go lex(i, str[cutPoints[i]:cutPoints[i+1]], stackPools[i], lexC)
 	}
 
-	for i := 0; i < numLexThreads; i++ {
-		curLexThreadContext := <-lexC
-		lexThreadContexts[curLexThreadContext.num] = curLexThreadContext
+	lexResults := make([]lexResult, numLexThreads)
 
-		if curLexThreadContext.result == "failure" {
-			Stats.LexTime = time.Since(start)
+	for i := 0; i < numLexThreads; i++ {
+		curLexResult := <-lexC
+		lexResults[curLexResult.threadNum] = curLexResult
+
+		if !curLexResult.success {
+			Stats.LexTimeTotal = time.Since(start)
 			return nil, errors.New("Lexing error")
 		}
 	}
 
-	input := lexThreadContexts[0].output
+	input := lexResults[0].tokenList
 
 	for i := 1; i < numLexThreads; i++ {
-		input.Merge(*lexThreadContexts[i].output)
+		input.Merge(*lexResults[i].tokenList)
 	}
 
 	//input, err := lex(str, stackPool, lexC)
 
-	Stats.LexTime = time.Since(start)
+	Stats.LexTimeTotal = time.Since(start)
 
 	//If lexing fails, abort the parsing
 	/*if err != nil {
@@ -313,7 +361,7 @@ func ParseString(str []byte, numThreads int) (*symbol, error) {
 		defer pprof.StopCPUProfile()
 	}
 
-	Stats.NumTokens = input.Length()
+	Stats.NumTokensTotal = input.Length()
 
 	if input.Length() == 0 {
 		return nil, nil
@@ -330,48 +378,36 @@ func ParseString(str []byte, numThreads int) (*symbol, error) {
 		numThreads = input.NumStacks()
 	}
 
+	Stats.NumParseThreads = numThreads
+	Stats.ParseTimes = make([]time.Duration, numThreads)
+
 	//Split the input list
 	inputLists := input.Split(numThreads)
 
-	newNonTerminalsLists := make([]listOfStacks, numThreads)
-
+	Stats.NumTokens = make([]int, numThreads)
 	for i := 0; i < numThreads; i++ {
-		newNonTerminalsLists[i] = newLos(stackPool)
+		Stats.NumTokens[i] = inputLists[i].Length()
 	}
 
-	threadContexts := make([]threadContext, numThreads)
+	parseResults := make([]parseResult, numThreads)
 
-	c := make(chan threadContext)
+	c := make(chan parseResult)
 
 	//Create the thread contexts and run the threads
 	for i := 0; i < numThreads; i++ {
-		curThreadStack := newLosPtr(stackPtrPool)
-		//If the thread is the first, push a # onto the stack
-		if i == 0 {
-			curThreadStack.Push(&symbol{_TERM, _NO_PREC, nil, nil, nil})
-			//Otherwise, push the first token onto the stack
-		} else {
-			curInputListIter := inputLists[i].HeadIterator()
-			sym := curInputListIter.Next()
-			sym.Precedence = _NO_PREC
-			curThreadStack.Push(sym)
-		}
-		//If the thread is the last, push a # onto the input list
-		if i == numThreads-1 {
-			inputLists[i].Push(&symbol{_TERM, _NO_PREC, nil, nil, nil})
-			//Otherwise, push onto the input list the first token of the next input list
-		} else {
-			nextInputListIter := inputLists[i+1].HeadIterator()
-			inputLists[i].Push(nextInputListIter.Next())
-		}
-		threadContexts[i] = threadContext{i, &inputLists[i], &newNonTerminalsLists[i], &curThreadStack, ""}
-
 		//fmt.Print("Thread", i, " input: ")
 		//threadContexts[i].input.Println()
 		//fmt.Print("Thread", i, " stack: ")
 		//threadContexts[i].stack.Println()
 
-		go threadJob(threadContexts[i], c)
+		var nextSym *symbol = nil
+
+		if i < numThreads-1 {
+			nextInputListIter := inputLists[i+1].HeadIterator()
+			nextSym = nextInputListIter.Next()
+		}
+
+		go threadJob(numThreads, i, false, &inputLists[i], nextSym, stackPoolsNewNonterminals[i], stackPtrPools[i], c)
 
 		/*threadContexts[i] = <-c
 
@@ -388,9 +424,9 @@ func ParseString(str []byte, numThreads int) (*symbol, error) {
 
 	//Wait for each thread to finish its job
 	for i := 0; i < numThreads; i++ {
-		threadContext := <-c
+		curParseResults := <-c
 
-		threadContexts[threadContext.num] = threadContext
+		parseResults[curParseResults.threadNum] = curParseResults
 
 		//fmt.Println("Thread", threadContext.num, "finished parsing")
 		//fmt.Println("Result:", threadContext.result)
@@ -398,18 +434,22 @@ func ParseString(str []byte, numThreads int) (*symbol, error) {
 		//threadContext.stack.Println()
 
 		//If one of the threads fails, abort the parsing
-		if threadContext.result == "failure" {
-			Stats.ParseTime = time.Since(start)
+		if !curParseResults.success {
+			Stats.ParseTimeTotal = time.Since(start)
 			return nil, errors.New("Parsing error")
 		}
 	}
 
+	//Stats.RemainingStacks = stackPool.Remainder()
+	//Stats.RemainingStackPtrs = stackPtrPool.Remainder()
+
 	//If the number of threads is greater than one, a final pass is required
 	if numThreads > 1 {
+		startRecombiningStacks := time.Now()
 		//Create the final input by joining together the stacks from the previous step
-		finalPassInput := newLos(stackPool)
+		finalPassInput := newLos(stackPoolFinalPass)
 		for i := 0; i < numThreads; i++ {
-			iterator := threadContexts[i].stack.HeadIterator()
+			iterator := parseResults[i].stack.HeadIterator()
 			//Ignore the first token
 			iterator.Next()
 			sym := iterator.Next()
@@ -418,49 +458,48 @@ func ParseString(str []byte, numThreads int) (*symbol, error) {
 				sym = iterator.Next()
 			}
 		}
-
-		finalPassNewNonTerminalsList := newLos(stackPool)
-
-		finalPassStack := newLosPtr(stackPtrPool)
-		finalPassStack.Push(&symbol{_TERM, _NO_PREC, nil, nil, nil})
-		finalPassThreadContext := threadContext{0, &finalPassInput, &finalPassNewNonTerminalsList, &finalPassStack, ""}
+		Stats.RecombiningStacksTime = time.Since(startRecombiningStacks)
 
 		//fmt.Print("Final pass thread input: ")
 		//finalPassThreadContext.input.Println()
 		//fmt.Print("Final pass thread stack: ")
 		//finalPassThreadContext.stack.Println()
 
-		go threadJob(finalPassThreadContext, c)
+		go threadJob(1, 0, true, &finalPassInput, nil, stackPoolNewNonterminalsFinalPass, stackPtrPoolFinalPass, c)
 
-		finalPassThreadContext = <-c
+		finalPassParseResult := <-c
 
 		//fmt.Println("Final thread finished parsing")
 		//fmt.Println("Result:", finalPassThreadContext.result)
 		//fmt.Print("Final stack: ")
 		//finalPassThreadContext.stack.Println()
 
-		if finalPassThreadContext.result == "failure" {
-			Stats.ParseTime = time.Since(start)
+		if !finalPassParseResult.success {
+			Stats.ParseTimeTotal = time.Since(start)
 			return nil, errors.New("Parsing error")
 		}
 
 		//Pop tokens from the stack until a nonterminal is found
-		sym := finalPassThreadContext.stack.Pop()
+		sym := finalPassParseResult.stack.Pop()
 
 		for isTerminal(sym.Token) {
-			sym = finalPassThreadContext.stack.Pop()
+			sym = finalPassParseResult.stack.Pop()
 		}
 
 		//sym.PrintTreeln()
 
 		//Set the result as the nonterminal symbol
 		result = sym
+
+		Stats.RemainingStacksFinalPass = stackPoolFinalPass.Remainder()
+		Stats.RemainingStacksNewNonterminalsFinalPass = stackPoolNewNonterminalsFinalPass.Remainder()
+		Stats.RemainingStackPtrsFinalPass = stackPtrPoolFinalPass.Remainder()
 	} else {
 		//Pop tokens from the stack until a nonterminal is found
-		sym := threadContexts[0].stack.Pop()
+		sym := parseResults[0].stack.Pop()
 
 		for isTerminal(sym.Token) {
-			sym = threadContexts[0].stack.Pop()
+			sym = parseResults[0].stack.Pop()
 		}
 
 		//sym.PrintTreeln()
@@ -469,10 +508,20 @@ func ParseString(str []byte, numThreads int) (*symbol, error) {
 		result = sym
 	}
 
-	Stats.ParseTime = time.Since(start)
+	Stats.RemainingStacks = make([]int, numThreads)
+	Stats.RemainingStacksNewNonterminals = make([]int, numThreads)
+	Stats.RemainingStackPtrs = make([]int, numThreads)
 
-	Stats.RemainingStacks = stackPool.Remainder()
-	Stats.RemainingStackPtrs = stackPtrPool.Remainder()
+	for i := 0; i < numThreads; i++ {
+		Stats.RemainingStacks[i] = stackPools[i].Remainder()
+		Stats.RemainingStacksNewNonterminals[i] = stackPoolsNewNonterminals[i].Remainder()
+		Stats.RemainingStackPtrs[i] = stackPtrPools[i].Remainder()
+	}
+
+	Stats.ParseTimeTotal = time.Since(start)
+
+	//Stats.RemainingStacks = stackPool.Remainder()
+	//Stats.RemainingStackPtrs = stackPtrPool.Remainder()
 
 	return result, nil
 }

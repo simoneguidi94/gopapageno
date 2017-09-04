@@ -9,7 +9,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/simoneguidi94/gopapageno/languages/xml"
+	"github.com/simoneguidi94/gopapageno/languages/arithmetic"
 )
 
 var fname = flag.String("fname", "", "the name of the file to parse")
@@ -86,19 +86,20 @@ func main() {
 		for j := 0; j < *numTests; j++ {
 			fmt.Printf("Test n° %d:\n", j+1)
 
-			_, err := xml.ParseFile(*fname, curNumThreads)
+			root, err := arithmetic.ParseFile(*fname, curNumThreads)
 
 			runtime.GC()
 
 			if err == nil {
 				fmt.Println("Parse succeded!")
-				fmt.Printf("Time to alloc memory: %s\n", xml.Stats.AllocMemTime)
-				fmt.Printf("Time to lex: %s\n", xml.Stats.LexTimeTotal)
-				fmt.Printf("Time to parse: %s\n\n", xml.Stats.ParseTimeTotal)
+				fmt.Printf("Time to alloc memory: %s\n", arithmetic.Stats.AllocMemTime)
+				fmt.Printf("Time to lex: %s\n", arithmetic.Stats.LexTimeTotal)
+				fmt.Printf("Time to parse: %s\n\n", arithmetic.Stats.ParseTimeTotal)
+				fmt.Printf("Result: %d\n", *root.Value.(*int64))
 
-				memAllocTimes[j] = xml.Stats.AllocMemTime
-				lexTimes[j] = xml.Stats.LexTimeTotal
-				parseTimes[j] = xml.Stats.ParseTimeTotal
+				memAllocTimes[j] = arithmetic.Stats.AllocMemTime
+				lexTimes[j] = arithmetic.Stats.LexTimeTotal
+				parseTimes[j] = arithmetic.Stats.ParseTimeTotal
 			} else {
 				//This should not happen
 				fmt.Println("Parse failed!")

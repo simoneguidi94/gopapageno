@@ -54,15 +54,54 @@ func main() {
 
 	if err == nil {
 		fmt.Println("Parse succeded!")
-		fmt.Printf("Stack pool size: %d\n", arithmetic.Stats.StackPoolSize)
-		fmt.Printf("StackPtr pool size: %d\n", arithmetic.Stats.StackPtrPoolSize)
-		fmt.Printf("Time to alloc memory: %s\n", arithmetic.Stats.AllocMemTime)
-		fmt.Printf("Time to lex: %s\n", arithmetic.Stats.LexTime)
-		fmt.Printf("Number of tokens: %d\n", arithmetic.Stats.NumTokens)
-		fmt.Printf("Time to parse: %s\n", arithmetic.Stats.ParseTime)
-		fmt.Printf("Remaining parser stacks: %d\n", arithmetic.Stats.RemainingStacks)
-		fmt.Printf("Remaining parser stackptrs: %d\n", arithmetic.Stats.RemainingStackPtrs)
-		fmt.Println("Result:", *root.Value.(*int64))
+		for i, v := range arithmetic.Stats.StackPoolSizes {
+			fmt.Printf("Stack pool size (thread %d): %d\n", i, v)
+		}
+		for i, v := range arithmetic.Stats.StackPoolNewNonterminalsSizes {
+			fmt.Printf("Stack pool new nonterminals size (thread %d): %d\n", i, v)
+		}
+		for i, v := range arithmetic.Stats.StackPtrPoolSizes {
+			fmt.Printf("StackPtr pool size (thread %d): %d\n", i, v)
+		}
+		fmt.Printf("Stack pool final pass size: %d\n", arithmetic.Stats.StackPoolSizeFinalPass)
+		fmt.Printf("Stack pool final pass new nonterminals size: %d\n", arithmetic.Stats.StackPoolNewNonterminalsSizeFinalPass)
+		fmt.Printf("StackPtr pool final pass size: %d\n", arithmetic.Stats.StackPtrPoolSizeFinalPass)
+		fmt.Printf("Time to alloc memory: %s\n\n", arithmetic.Stats.AllocMemTime)
+
+		for i, v := range arithmetic.Stats.CutPoints {
+			fmt.Printf("cutpoint %d: %d\n", i, v)
+		}
+		for i, v := range arithmetic.Stats.LexTimes {
+			fmt.Printf("Time to lex (thread %d): %s\n", i, v)
+		}
+		fmt.Printf("Time to lex (total): %s\n\n", arithmetic.Stats.LexTimeTotal)
+
+		for i, v := range arithmetic.Stats.NumTokens {
+			fmt.Printf("Number of tokens (thread %d): %d\n", i, v)
+		}
+		fmt.Printf("Number of tokens (total): %d\n", arithmetic.Stats.NumTokensTotal)
+		for i, v := range arithmetic.Stats.ParseTimes {
+			fmt.Printf("Time to parse (thread %d): %s\n", i, v)
+		}
+		fmt.Printf("Time to recombine the stacks: %s\n", arithmetic.Stats.RecombiningStacksTime)
+		fmt.Printf("Time to parse (final pass): %s\n", arithmetic.Stats.ParseTimeFinalPass)
+		fmt.Printf("Time to parse (total): %s\n\n", arithmetic.Stats.ParseTimeTotal)
+
+		for i, v := range arithmetic.Stats.RemainingStacks {
+			fmt.Printf("Remaining stacks (thread %d): %d\n", i, v)
+		}
+		for i, v := range arithmetic.Stats.RemainingStacksNewNonterminals {
+			fmt.Printf("Remaining stacks new nonterminals (thread %d): %d\n", i, v)
+		}
+		for i, v := range arithmetic.Stats.RemainingStackPtrs {
+			fmt.Printf("Remaining stackPtrs (thread %d): %d\n", i, v)
+		}
+
+		fmt.Printf("Remaining stacks final pass: %d\n", arithmetic.Stats.RemainingStacksFinalPass)
+		fmt.Printf("Remaining stacks new nonterminals final pass: %d\n", arithmetic.Stats.RemainingStacksNewNonterminalsFinalPass)
+		fmt.Printf("Remaining stackPtrs final pass: %d\n\n", arithmetic.Stats.RemainingStackPtrsFinalPass)
+
+		fmt.Printf("Result: %d\n", *root.Value.(*int64))
 	} else {
 		fmt.Println("Parse failed!")
 		fmt.Println(err.Error())

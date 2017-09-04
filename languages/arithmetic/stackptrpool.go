@@ -2,7 +2,6 @@ package arithmetic
 
 import (
 	"fmt"
-	"sync"
 )
 
 /*
@@ -12,33 +11,28 @@ It is thread-safe.
 type stackPtrPool struct {
 	pool []stackPtr
 	cur  int
-	lock sync.Mutex
 }
 
 /*
 newStackPtrPool creates a new pool, allocating memory for a number of elements equal to length.
 */
 func newStackPtrPool(length int) *stackPtrPool {
-	p := stackPtrPool{make([]stackPtr, length), 0, sync.Mutex{}}
+	p := stackPtrPool{make([]stackPtr, length), 0}
 
 	return &p
 }
 
 /*
-GetSync gets an item from the pool if available, otherwise it initializes a new one.
-It is thread-safe.
+Get gets an item from the pool if available, otherwise it initializes a new one.
+It is NOT thread-safe.
 */
-func (p *stackPtrPool) GetSync() *stackPtr {
-	p.lock.Lock()
+func (p *stackPtrPool) Get() *stackPtr {
 	if p.cur >= len(p.pool) {
 		fmt.Println("Allocating a new stack!")
-		newStack := new(stackPtr)
-		p.lock.Unlock()
-		return newStack
+		return new(stackPtr)
 	}
 	addr := &p.pool[p.cur]
 	p.cur++
-	p.lock.Unlock()
 	return addr
 }
 

@@ -30,7 +30,7 @@ type iteratorPtr struct {
 newLosPtr creates a new listOfStackPtrs initialized with one empty stack.
 */
 func newLosPtr(pool *stackPtrPool) listOfStackPtrs {
-	firstStack := pool.GetSync()
+	firstStack := pool.Get()
 	return listOfStackPtrs{firstStack, firstStack, 0, nil, pool}
 }
 
@@ -42,17 +42,34 @@ func (l *listOfStackPtrs) Push(sym *symbol) *symbol {
 	curStack := l.cur
 
 	//If the current stack is full obtain a new stack and set it as the current one
-	if curStack.Tos >= _STACK_PTR_SIZE {
-		if curStack.Next != nil {
-			curStack = curStack.Next
-		} else {
-			newStack := l.pool.GetSync()
-			curStack.Next = newStack
-			newStack.Prev = curStack
-			curStack = newStack
+	if curStack.Tos < _STACK_PTR_SIZE {
+		//Copy the symbol pointer in the current position
+		curStack.Data[curStack.Tos] = sym
+
+		//If the symbol is a terminal update the firstTerminal pointer
+		if isTerminal(sym.Token) {
+			l.firstTerminal = sym
 		}
-		l.cur = curStack
+
+		//Increment the current position
+		curStack.Tos++
+
+		//Increment the total length of the list
+		l.len++
+
+		//Return the symbol pointer
+		return sym
 	}
+
+	if curStack.Next != nil {
+		curStack = curStack.Next
+	} else {
+		newStack := l.pool.Get()
+		curStack.Next = newStack
+		newStack.Prev = curStack
+		curStack = newStack
+	}
+	l.cur = curStack
 
 	//Copy the symbol pointer in the current position
 	curStack.Data[curStack.Tos] = sym
@@ -83,18 +100,23 @@ func (l *listOfStackPtrs) Pop() *symbol {
 
 	//While the current stack is empty set the previous stack as the current one.
 	//If there are no more stacks return nil
-	for curStack.Tos < 0 {
-		curStack.Tos = 0
+	if curStack.Tos >= 0 {
+		//Decrement the total length of the list
+		l.len--
 
-		if curStack.Prev == nil {
-			return nil
-		}
-
-		curStack = curStack.Prev
-		l.cur = curStack
-
-		curStack.Tos--
+		//Return the symbol pointer
+		return curStack.Data[curStack.Tos]
 	}
+
+	curStack.Tos = 0
+
+	if curStack.Prev == nil {
+		return nil
+	}
+
+	curStack = curStack.Prev
+	curStack.Tos--
+	l.cur = curStack
 
 	//Decrement the total length of the list
 	l.len--
@@ -137,7 +159,7 @@ func (l *listOfStackPtrs) Split(numSplits int) []listOfStackPtrs {
 
 	for totAssignedStacks < numStacks {
 		remainder += deltaStacks
-		stacksToAssign := int(math.Floor(remainder))
+		stacksToAssign := int(math.Floor(remainder + 0.5))
 
 		curStack.Prev = nil
 		listsOfStacks[curList] = listOfStackPtrs{curStack, curStack, curStack.Tos, nil, l.pool}
@@ -262,7 +284,7 @@ func (l *listOfStackPtrs) TailIterator() iteratorPtr {
 }
 
 /*
-Prev moves the iterator one position backward and returns the current symbol pointer.
+Prev moves the iterator one position backward and returns a pointer to the current symbol.
 It returns nil if it points before the first element of the list.
 */
 func (i *iteratorPtr) Prev() *symbol {
@@ -270,35 +292,37 @@ func (i *iteratorPtr) Prev() *symbol {
 
 	i.pos--
 
-	for i.pos < 0 {
-		i.pos = -1
-		if curStack.Prev == nil {
-			return nil
-		}
-		curStack = curStack.Prev
-		i.cur = curStack
-		i.pos = curStack.Tos - 1
+	if i.pos >= 0 {
+		return curStack.Data[i.pos]
 	}
+
+	i.pos = -1
+	if curStack.Prev == nil {
+		return nil
+	}
+	curStack = curStack.Prev
+	i.cur = curStack
+	i.pos = curStack.Tos - 1
 
 	return curStack.Data[i.pos]
 }
 
 /*
-Cur returns the current symbol pointer.
+Cur returns a pointer to the current symbol.
 It returns nil if it points before the first element or after the last element of the list.
 */
 func (i *iteratorPtr) Cur() *symbol {
 	curStack := i.cur
 
-	if i.pos < 0 || i.pos >= curStack.Tos {
-		return nil
+	if i.pos >= 0 && i.pos < curStack.Tos {
+		return curStack.Data[i.pos]
 	}
 
-	return curStack.Data[i.pos]
+	return nil
 }
 
 /*
-Next moves the iterator one position forward and returns the current symbol pointer.
+Next moves the iterator one position forward and returns a pointer to the current symbol.
 It returns nil if it points after the last element of the list.
 */
 func (i *iteratorPtr) Next() *symbol {
@@ -306,15 +330,17 @@ func (i *iteratorPtr) Next() *symbol {
 
 	i.pos++
 
-	for i.pos >= curStack.Tos {
-		i.pos = curStack.Tos
-		if curStack.Next == nil {
-			return nil
-		}
-		curStack = curStack.Next
-		i.cur = curStack
-		i.pos = 0
+	if i.pos < curStack.Tos {
+		return curStack.Data[i.pos]
 	}
+
+	i.pos = curStack.Tos
+	if curStack.Next == nil {
+		return nil
+	}
+	curStack = curStack.Next
+	i.cur = curStack
+	i.pos = 0
 
 	return curStack.Data[i.pos]
 }
